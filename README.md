@@ -23,7 +23,7 @@ I welcome bugfixes and contributions, but be aware that I will not merge PRs tha
 
 - Ensure you have Python 3.5 or later installed
 - Install the necessary dependencies by running `pip3 install -r requirements.txt`
-- Download the [latest release]() of this project, or clone the git project.
+- Download the [latest release](https://github.com/firasdib/snapper/releases) of this project, or clone the git project.
 - Copy or rename `config.json.example` to `config.json`
 - Run the script via `python3 snapper.py`
 
