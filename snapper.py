@@ -146,8 +146,8 @@ def run_snapraid(commands):
     result = subprocess.run([snapraid_bin] + commands, capture_output=True, text=True)
 
     # Ignore fairly safe/common warnings
-    if result.stderr and not re.search(
-            r"WARNING! (?:With \d+ disks it's recommended to use \w+ parity levels|You cannot modify data disk during a sync)",
+    if result.stderr and re.search(
+            r"WARNING! +(?!With \d+ disks it's recommended to use \w+ parity levels|You cannot modify data disk during a sync)",
             result.stderr):
         msg = f'SnapRAID error during command "{commands}" - {result.stderr}. Execution has been halted.'
         log.error(msg)
