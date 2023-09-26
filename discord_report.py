@@ -70,8 +70,7 @@ def create_discord_report(
         scrub_embed['color'] = did_run_color
         scrub_embed['description'] = f'''Scrub Job finished successfully :white_check_mark:
         
-        **{scrub_stats["unscrubbed"]}%** of the array has not been scrubbed, with the oldest block at **{scrub_stats["scrub_age"]}** day(s), the median at **{scrub_stats["median"]}** day(s), and the newest at **{scrub_stats["newest"]}** day(s).
-        '''
+**{scrub_stats["unscrubbed"]}%** of the array has not been scrubbed, with the oldest block at **{scrub_stats["scrub_age"]}** day(s), the median at **{scrub_stats["median"]}** day(s), and the newest at **{scrub_stats["newest"]}** day(s).'''
 
         scrub_embed['footer'] = {
             'text': f'Elapsed time {scrub_job_time}'
