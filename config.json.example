@@ -4,7 +4,7 @@
   "mail_bin": "/usr/bin/mailx",
   "from_email": "from@email.com",
   "to_email": "to@email.com",
-  "log_dir": "./logs",
+  "log_dir": "/var/log/snapper",
   "log_count": 14,
   "added_threshold": 500,
   "removed_threshold": 500,

@@ -9,12 +9,12 @@ import argparse
 from datetime import datetime
 from email_report import create_email_report
 from discord_report import create_discord_report
-from utils import format_delta
+from utils import format_delta, get_relative_path
 
 #
 # Read config
 
-with open('config.json', 'r') as f:
+with open(get_relative_path(__file__, './config.json'), 'r') as f:
     config = json.load(f)
 
 
@@ -22,12 +22,10 @@ with open('config.json', 'r') as f:
 # Configure logging
 
 def setup_logger(name, log_file, level='INFO'):
-    log_dir = os.path.abspath(config['log_dir'])
+    if not os.path.exists(config['log_dir']):
+        os.makedirs(config['log_dir'])
 
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-
-    log_file_path = os.path.join(log_dir, log_file)
+    log_file_path = os.path.join(config['log_dir'], log_file)
 
     handler = logging.handlers.RotatingFileHandler(log_file_path, backupCount=max(config['log_count'], 1))
     handler.setFormatter(logging.Formatter('[%(asctime)s] - [%(levelname)s] - %(message)s'))

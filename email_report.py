@@ -1,4 +1,6 @@
-with open('email_format.html', 'r') as f:
+from utils import get_relative_path
+
+with open(get_relative_path(__file__, './email_format.html'), 'r') as f:
     email_report_template = f.read()
 
 
