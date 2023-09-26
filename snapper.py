@@ -143,16 +143,28 @@ def run_snapraid(commands):
 
     result = subprocess.run([snapraid_bin] + commands, capture_output=True, text=True)
 
-    # Ignore fairly safe/common warnings
-    if result.stderr and re.search(
-            r"WARNING!(?! *(?:With \d+ disks it's recommended to use \w+ parity levels|You cannot modify data disk during a sync))",
-            result.stderr, flags=re.IGNORECASE):
-        msg = f'SnapRAID error during command "{commands}" - {result.stderr}. Execution has been halted.'
-        log.error(msg)
-        notify_warning(msg)
+    if result.stderr:
+        # Remove all "acceptable" errors
+        # If there are errors that are not caught here, they are considered critical.
 
-        raw_log.error(result.stderr)
-        exit(1)
+        snapraid_errors = re.sub(r"^(?:WARNING! (?:With \d+ disks it's recommended to use \w+ parity levels|You cannot "
+                                 r"modify data disk during a sync)|Rerun the sync command when finished|Missing file "
+                                 r".+)\.[\r\n]*$", '', result.stderr, flags=re.IGNORECASE | re.MULTILINE)
+
+        if snapraid_errors != '':
+            msg = f'''A critical SnapRAID error was encountered during command "snapraid {' '.join(commands)}".
+Here's the first 100 characters:
+
+```
+${snapraid_errors[0:100]}
+```
+ 
+Execution has been halted.'''
+            log.error(msg)
+            notify_warning(msg)
+
+            raw_log.error(result.stderr)
+            exit(1)
 
     raw_log.info(result.stdout)
 
