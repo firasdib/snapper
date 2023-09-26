@@ -1,5 +1,6 @@
 from pathlib import Path
 
+
 def format_delta(delta):
     hours, remainder = divmod(delta.seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
