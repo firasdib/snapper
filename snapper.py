@@ -65,9 +65,9 @@ force_script_execution = args['force']
 # Helpers
 
 def notify_warning(message):
-    message = message + ' Please review your logs ASAP.'
+    log.error(message)
     send_email('WARNING! SnapRAID jobs unsuccessful', message)
-    send_discord(':warning: ' + message)
+    send_discord(f':warning: [**WARNING!**] {message}')
 
 
 def send_discord(message, embeds=None):
@@ -89,10 +89,10 @@ def send_discord(message, embeds=None):
 
     try:
         result.raise_for_status()
-    except requests.exceptions.HTTPError as err:
-        log.error(f'Unable to send message to discord, {err}')
-    else:
+
         log.info('Successfully posted message to discord')
+    except requests.exceptions.HTTPError as err:
+        raise ConnectionError('Unable to send message to discord') from err
 
 
 def send_email(subject, message):
@@ -103,8 +103,7 @@ def send_email(subject, message):
     to_email = config['to_email']
 
     if not os.path.isfile(mail_bin):
-        log.error(f'Unable to find mail executable at "{mail_bin}".')
-        exit(1)
+        raise FileNotFoundError('Unable to find mail executable', mail_bin)
 
     result = subprocess.run([
         mail_bin,
@@ -115,9 +114,9 @@ def send_email(subject, message):
     ], input=message, capture_output=True, text=True)
 
     if result.stderr:
-        log.error(f'Unable to send email: {result.stderr}')
-    else:
-        log.info(f'Successfully sent email to {to_email}')
+        raise ConnectionError('Unable to send email', result.stderr)
+
+    log.info(f'Successfully sent email to {to_email}')
 
 
 def is_running():
@@ -132,20 +131,18 @@ def run_snapraid(commands):
     snapraid_bin = config['snapraid_bin']
 
     if not os.path.isfile(snapraid_bin):
-        msg = f'Unable to find SnapRAID executable at "{snapraid_bin}", unable to proceed.'
-        log.error(msg)
-        notify_warning(msg)
-        exit(1)
+        raise FileNotFoundError('Unable to find SnapRAID executable', snapraid_bin)
 
     if is_running():
-        msg = 'SnapRAID already seems to be running, unable to proceed.'
-        log.error(msg)
-        notify_warning(msg)
-        exit(1)
+        raise ChildProcessError('SnapRAID already seems to be running, unable to proceed.')
 
     result = subprocess.run([snapraid_bin] + commands, capture_output=True, text=True)
 
+    raw_log.info(result.stdout)
+
     if result.stderr:
+        raw_log.error(result.stderr)
+
         # Remove all "acceptable" errors
         # If there are errors that are not caught here, they are considered critical.
 
@@ -154,21 +151,20 @@ def run_snapraid(commands):
                                  r".+)\.[\r\n]*$", '', result.stderr, flags=re.IGNORECASE | re.MULTILINE)
 
         if snapraid_errors != '':
-            msg = f'''A critical SnapRAID error was encountered during command "snapraid {' '.join(commands)}".
+            raw_log.error(result.stderr)
+
+            raise SystemError(f'''A critical SnapRAID error was encountered during command "snapraid {' '.join(commands)}".
 Here's the first 100 characters:
 
 ```
 ${snapraid_errors[0:100]}
 ```
  
-Execution has been halted.'''
-            log.error(msg)
-            notify_warning(msg)
+Execution has been halted.''')
 
-            raw_log.error(result.stderr)
-            exit(1)
-
-    raw_log.info(result.stdout)
+    # diff returns code 2 if a sync is required
+    if result.returncode != 0 or (commands[0] == 'diff' and result.returncode != 2):
+        raise SystemError(f'SnapRAID exited with code {result.returncode}, please review the logs.')
 
     return result.stdout
 
@@ -192,27 +188,14 @@ def get_status():
     zero_subsecond_count = re.search(r'^You have (?P<touch_files>\d+) files with zero sub-second timestamp',
                                      snapraid_status, flags=re.MULTILINE)
 
+    sync_in_progress = bool(re.search(r'^You have a sync in progress', snapraid_status, flags=re.MULTILINE))
+
     if scrub_info is None:
-        msg = 'Unable to parse SnapRAID status, not proceeding.'
-        log.error(msg)
-        notify_warning(msg)
-        exit(1)
+        raise ValueError('Unable to parse SnapRAID status')
 
-    if unscrubbed_percent is None:
-        # 0% unscrubbed
-        unscrubbed_percent = 0
-    else:
-        unscrubbed_percent = int(unscrubbed_percent[1])
-
-    if zero_subsecond_count is None:
-        zero_subsecond_count = 0
-    else:
-        zero_subsecond_count = int(zero_subsecond_count[1])
-
-    if error_count is None:
-        error_count = 0
-    else:
-        error_count = int(error_count[1])
+    unscrubbed_percent = 0 if unscrubbed_percent is None else int(unscrubbed_percent[1])
+    zero_subsecond_count = 0 if zero_subsecond_count is None else int(zero_subsecond_count[1])
+    error_count = 0 if error_count is None else int(error_count[1])
 
     return (
         drive_stats,
@@ -223,7 +206,8 @@ def get_status():
             'newest': int(scrub_info[3])
         },
         error_count,
-        zero_subsecond_count
+        zero_subsecond_count,
+        sync_in_progress
     )
 
 
@@ -240,10 +224,7 @@ def get_diff():
     [diff_data] = [m.groupdict() for m in diff_regex.finditer(snapraid_diff)]
 
     if diff_data is None:
-        msg = 'Unable to parse diff output from SnapRAID, not proceeding.'
-        log.error(msg)
-        notify_warning(msg)
-        exit(1)
+        raise ValueError('Unable to parse diff output from SnapRAID, not proceeding.')
 
     diff_int = dict([a, int(x)] for a, x in diff_data.items())
 
@@ -262,10 +243,7 @@ def get_smart():
     global_fp = re.search(r'next year is (?P<total_fp>\d+)%', smart_data).group(1)
 
     if drive_data is None or global_fp is None:
-        msg = 'Unable to parse drive data or global failure percentage, not proceeding.'
-        log.error(msg)
-        notify_warning(msg)
-        exit(1)
+        raise ValueError('Unable to parse drive data or global failure percentage, not proceeding.')
 
     return drive_data, global_fp
 
@@ -306,21 +284,15 @@ def run_touch():
 def check_completed_status(message, job_type):
     if not re.search(r'^Everything OK', message, flags=re.MULTILINE) and not re.search(r'^Nothing to do', message,
                                                                                        flags=re.MULTILINE):
-        msg = f'SnapRAID {job_type} job did not finish as expected, please check your logs. Remaining jobs have been ' \
-              f'cancelled.'
-        log.error(msg)
-        notify_warning(msg)
-        exit(1)
+        raise SystemError(f'SnapRAID {job_type} job did not finish as expected, please check your logs. Remaining '
+                          f'jobs have been cancelled.')
 
 
 def sanity_check():
     config_file = config['snapraid_config_file']
 
     if not os.path.isfile(config_file):
-        msg = f'Unable to find SnapRAID configuration file at "{config_file}", unable to proceed.'
-        log.error(msg)
-        notify_warning(msg)
-        exit(1)
+        raise FileNotFoundError('Unable to find SnapRAID configuration', config_file)
 
     with open(config_file, 'r') as file:
         config_content = file.read()
@@ -330,10 +302,7 @@ def sanity_check():
 
     for file in files:
         if not os.path.isfile(file):
-            msg = f'Unable to locate required file "{file}", halting all execution.'
-            notify_warning(msg)
-            log.error(msg)
-            exit(1)
+            raise FileNotFoundError('Unable to locate required content/parity file', file)
 
     log.info(f'All {len(files)} content and parity files found, proceeding.')
 
@@ -342,124 +311,102 @@ def sanity_check():
 # Main
 
 def main():
-    # Metadata for report
-    sync_job_time = ''
-    scrub_job_time = ''
-    sync_job_ran = False
-    scrub_job_ran = False
+    try:
+        # Metadata for report
+        sync_job_time = None
+        scrub_job_time = None
+        sync_job_ran = False
+        scrub_job_ran = False
 
-    total_start = datetime.now()
+        total_start = datetime.now()
 
-    log.info('Snapper started')
+        log.info('Snapper started')
+        log.info('Running sanity checks...')
 
-    log.info('Running sanity checks...')
+        if not force_script_execution:
+            sanity_check()
 
-    if not force_script_execution:
-        sanity_check()
+        log.info('Checking for errors and files with zero sub-second timestamps...')
 
-    log.info('Checking for errors and files with zero sub-second timestamps...')
+        (_, _, error_count, zero_subsecond_count, sync_in_progress) = get_status()
 
-    (_, _, error_count, zero_subsecond_count) = get_status()
+        if error_count > 0 and not force_script_execution:
+            raise SystemError(
+                f'There are {error_count} errors in you array, you should review this immediately. All jobs '
+                f'have been halted.')
 
-    if error_count > 0 and not force_script_execution:
-        msg = f'There are {error_count} errors in you array, you should review this immediately. All jobs have been ' \
-              f'halted.'
-        log.error(msg)
-        notify_warning(msg)
-        exit(1)
+        if zero_subsecond_count > 0:
+            log.info(f'Found {zero_subsecond_count} file(s) with zero sub-second timestamp')
+            log.info('Running touch job...')
+            run_touch()
 
-    if zero_subsecond_count > 0:
-        log.info(f'Found {zero_subsecond_count} file(s) with zero sub-second timestamp')
-        log.info('Running touch job...')
-        run_touch()
+        log.info('Get SnapRAID diff...')
 
-    log.info('Get SnapRAID diff...')
+        diff_data = get_diff()
+        added_threshold = config['added_threshold']
+        removed_threshold = config['removed_threshold']
 
-    diff_data = get_diff()
-    added_threshold = config['added_threshold']
-    removed_threshold = config['removed_threshold']
+        log.info(f'Diff output: {diff_data["equal"]} equal, ' +
+                 f'{diff_data["added"]} added, ' +
+                 f'{diff_data["removed"]} removed, ' +
+                 f'{diff_data["updated"]} updated, ' +
+                 f'{diff_data["moved"]} moved, ' +
+                 f'{diff_data["copied"]} copied, ' +
+                 f'{diff_data["restored"]} restored')
 
-    log.info(f'Diff output: {diff_data["equal"]} equal, ' +
-             f'{diff_data["added"]} added, ' +
-             f'{diff_data["removed"]} removed, ' +
-             f'{diff_data["updated"]} updated, ' +
-             f'{diff_data["moved"]} moved, ' +
-             f'{diff_data["copied"]} copied, ' +
-             f'{diff_data["restored"]} restored')
+        if sum(diff_data.values()) - diff_data["equal"] > 0 or sync_in_progress or force_script_execution:
+            if force_script_execution:
+                log.info('Ignoring any thresholds and forcefully proceeding with sync.')
+            elif 0 < added_threshold < diff_data["added"]:
+                raise ValueError(
+                    f'More files ({diff_data["added"]}) have been added than the configured max ({added_threshold})')
+            elif 0 < removed_threshold < diff_data["removed"]:
+                raise ValueError(
+                    f'More files ({diff_data["removed"]}) have been removed than the configured max ({removed_threshold})')
+            elif sync_in_progress:
+                log.info('A previous sync in progress has been detected, resuming.')
+            else:
+                log.info(
+                    f'Fewer files added ({diff_data["added"]}) than the configured limit ({added_threshold}), '
+                    f'proceeding.')
 
-    if sum(diff_data.values()) - diff_data["equal"] > 0:
-        if force_script_execution:
-            log.info('Ignoring added threshold and forcefully proceeding.')
-        elif 0 < added_threshold < diff_data["added"]:
-            msg = f'More files ({diff_data["added"]}) have been added than the configured max ({added_threshold}), ' \
-                  f'not proceeding.'
-            log.error(msg)
-            notify_warning(msg)
-            exit(0)
+                log.info(
+                    f'Fewer files removed ({diff_data["removed"]}) than the configured limit ({removed_threshold}), '
+                    f'proceeding.')
+
+            log.info(f'Running SnapRAID sync {"with" if config["prehash"] else "without"} pre-hashing...')
+            elapsed_time = run_sync()
+            sync_job_time = format_delta(elapsed_time)
+            log.info(f'Sync job finished, elapsed time {sync_job_time}')
+
+            sync_job_ran = True
         else:
-            log.info(
-                f'Fewer files added ({diff_data["added"]}) than the configured limit ({added_threshold}), proceeding.')
+            log.info('No changes to sync, skipping.')
 
-        if force_script_execution:
-            log.info('Ignoring added threshold and forcefully proceeding.')
-        elif 0 < removed_threshold < diff_data["removed"]:
-            msg = f'More files ({diff_data["removed"]}) have been removed than the configured max ({removed_threshold}), not proceeding.'
-            log.error(msg)
-            notify_warning(msg)
-            exit(0)
+        if config['scrub_percent'] > 0:
+            log.info('Running scrub job...')
+            elapsed_time = run_scrub()
+            scrub_job_time = format_delta(elapsed_time)
+            log.info(f'Scrub job finished, elapsed time {scrub_job_time}')
+
+            scrub_job_ran = True
         else:
-            log.info(
-                f'Fewer files removed ({diff_data["removed"]}) than the configured limit ({removed_threshold}), '
-                f'proceeding.')
+            log.info('Scrubbing not enabled, skipping.')
 
-        sync_job_ran = True
-        log.info(f'Running SnapRAID sync {"with" if config["prehash"] else "without"} pre-hashing...')
-        elapsed_time = run_sync()
-        sync_job_time = format_delta(elapsed_time)
-        log.info(f'Sync job finished, elapsed time {sync_job_time}')
-    else:
-        log.info('No changes to sync, skipping.')
+        log.info('Fetching SnapRAID status...')
+        (drive_stats, scrub_stats, error_count, _, _) = get_status()
 
-    if config['scrub_percent'] > 0:
-        scrub_job_ran = True
-        log.info('Running scrub job...')
-        elapsed_time = run_scrub()
-        scrub_job_time = format_delta(elapsed_time)
-        log.info(f'Scrub job finished, elapsed time {scrub_job_time}')
-    else:
-        log.info('Scrubbing not enabled, skipping.')
+        log.info(
+            f'{scrub_stats["unscrubbed"]}% of the array has not been scrubbed, with the oldest block at {scrub_stats["scrub_age"]} day(s), the median at {scrub_stats["median"]} day(s), and the newest at {scrub_stats["newest"]} day(s).')
 
-    log.info('Fetching SnapRAID status...')
-    (drive_stats, scrub_stats, error_count, _) = get_status()
+        log.info('Fetching smart data...')
+        (smart_drive_data, global_fp) = get_smart()
 
-    log.info(
-        f'{scrub_stats["unscrubbed"]}% of the array has not been scrubbed, with the oldest block at {scrub_stats["scrub_age"]} day(s), the median at {scrub_stats["median"]} day(s), and the newest at {scrub_stats["newest"]} day(s).')
+        log.info(f'Drive failure probability this year is {global_fp}%')
 
-    log.info('Fetching smart data...')
-    (smart_drive_data, global_fp) = get_smart()
+        total_time = format_delta(datetime.now() - total_start)
 
-    log.info(f'Drive failure probability this year is {global_fp}%')
-
-    total_time = format_delta(datetime.now() - total_start)
-
-    email_report = create_email_report(
-        sync_job_ran,
-        scrub_job_ran,
-        sync_job_time,
-        scrub_job_time,
-        diff_data,
-        zero_subsecond_count,
-        scrub_stats,
-        drive_stats,
-        smart_drive_data,
-        global_fp,
-        total_time
-    )
-
-    send_email('SnapRAID Job Completed Successfully', email_report)
-
-    if not config['discord_webhook_url'] is None:
-        (discord_message, embeds) = create_discord_report(
+        email_report = create_email_report(
             sync_job_ran,
             scrub_job_ran,
             sync_job_time,
@@ -473,9 +420,32 @@ def main():
             total_time
         )
 
-        send_discord(discord_message, embeds)
+        send_email('SnapRAID Job Completed Successfully', email_report)
 
-    log.info('SnapRAID jobs completed successfully, exiting.')
+        if not config['discord_webhook_url'] is None:
+            (discord_message, embeds) = create_discord_report(
+                sync_job_ran,
+                scrub_job_ran,
+                sync_job_time,
+                scrub_job_time,
+                diff_data,
+                zero_subsecond_count,
+                scrub_stats,
+                drive_stats,
+                smart_drive_data,
+                global_fp,
+                total_time
+            )
+
+            send_discord(discord_message, embeds)
+
+        log.info('SnapRAID jobs completed successfully, exiting.')
+    except (ValueError, ChildProcessError, SystemError) as err:
+        notify_warning(err.args[0])
+    except ConnectionError as err:
+        log.error(str(err))
+    except FileNotFoundError as err:
+        notify_warning(f'{err.args[0]} - missing file path `{err.args[1]}`')
 
 
 main()
