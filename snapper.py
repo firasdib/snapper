@@ -145,8 +145,8 @@ def run_snapraid(commands):
 
     # Ignore fairly safe/common warnings
     if result.stderr and re.search(
-            r"WARNING! +(?!With \d+ disks it's recommended to use \w+ parity levels|You cannot modify data disk during a sync)",
-            result.stderr):
+            r"WARNING!(?! *(?:With \d+ disks it's recommended to use \w+ parity levels|You cannot modify data disk during a sync))",
+            result.stderr, flags=re.IGNORECASE):
         msg = f'SnapRAID error during command "{commands}" - {result.stderr}. Execution has been halted.'
         log.error(msg)
         notify_warning(msg)
