@@ -7,8 +7,8 @@ import re
 import requests
 import argparse
 from datetime import datetime
-from email_report import create_email_report
-from discord_report import create_discord_report
+from reports.email_report import create_email_report
+from reports.discord_report import create_discord_report
 from utils import format_delta, get_relative_path
 
 #
