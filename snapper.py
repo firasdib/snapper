@@ -36,7 +36,7 @@ def setup_logger(name, log_file, level='INFO'):
     logger = logging.getLogger(name)
     logger.setLevel(level)
 
-    if (logger.hasHandlers()):
+    if logger.hasHandlers():
         logger.handlers.clear()
 
     logger.addHandler(handler)
@@ -50,15 +50,16 @@ log = setup_logger('snapper', 'snapper.log')
 log.handlers = raw_log.handlers + log.handlers
 log.addHandler(logging.StreamHandler())
 
-
 #
 # Parse command line args
 
 parser = argparse.ArgumentParser(description='SnapRAID execution wrapper')
-parser.add_argument('-f', '--force', help='Ignore any set thresholds or warnings and execute all jobs regardless', action='store_true')
+parser.add_argument('-f', '--force', help='Ignore any set thresholds or warnings and execute all jobs regardless',
+                    action='store_true')
 args = vars(parser.parse_args())
 
 force_script_execution = args['force']
+
 
 #
 # Helpers
@@ -67,6 +68,7 @@ def notify_warning(message):
     message = message + ' Please review your logs ASAP.'
     send_email('WARNING! SnapRAID jobs unsuccessful', message)
     send_discord(':warning: ' + message)
+
 
 def send_discord(message, embeds=None):
     webhook_url = config['discord_webhook_url']
@@ -175,7 +177,8 @@ def get_status():
     snapraid_status = run_snapraid(['status'])
 
     stats_regex = re.compile(
-        r'^ +(?P<file_count>\d+) +(?P<fragmented_files>\d+) +(?P<excess_fragments>\d+) +(?P<wasted_gb>[-.\d]+) +(?P<used_gb>\d+) +(?P<free_gb>\d+) +(?P<use_percent>\d+)%(?: +(?P<drive_name>\S+)|(?P<global_stats>)$)',
+        r'^ +(?P<file_count>\d+) +(?P<fragmented_files>\d+) +(?P<excess_fragments>\d+) +(?P<wasted_gb>[-.\d]+) +('
+        r'?P<used_gb>\d+) +(?P<free_gb>\d+) +(?P<use_percent>\d+)%(?: +(?P<drive_name>\S+)|(?P<global_stats>)$)',
         flags=re.MULTILINE)
     drive_stats = [m.groupdict() for m in stats_regex.finditer(snapraid_status)]
 
@@ -264,7 +267,7 @@ def get_smart():
         notify_warning(msg)
         exit(1)
 
-    return (drive_data, global_fp)
+    return drive_data, global_fp
 
 
 def run_sync():
@@ -303,10 +306,12 @@ def run_touch():
 def check_completed_status(message, job_type):
     if not re.search(r'^Everything OK', message, flags=re.MULTILINE) and not re.search(r'^Nothing to do', message,
                                                                                        flags=re.MULTILINE):
-        msg = f'SnapRAID {job_type} job did not finish as expected, please check your logs. Remaining jobs have been cancelled.'
+        msg = f'SnapRAID {job_type} job did not finish as expected, please check your logs. Remaining jobs have been ' \
+              f'cancelled.'
         log.error(msg)
         notify_warning(msg)
         exit(1)
+
 
 def sanity_check():
     config_file = config['snapraid_config_file']
@@ -317,20 +322,21 @@ def sanity_check():
         notify_warning(msg)
         exit(1)
 
-    with open(config_file, 'r') as f:
-        config_content = f.read()
+    with open(config_file, 'r') as file:
+        config_content = file.read()
 
     file_regex = re.compile(r'^(?:content|parity) +(.+\/snapraid.(?:content|parity)) *$', flags=re.MULTILINE)
     files = [m[1] for m in file_regex.finditer(config_content)]
 
-    for f in files:
-        if not os.path.isfile(f):
-            msg = f'Unable to locate required file "{f}", halting all execution.'
+    for file in files:
+        if not os.path.isfile(file):
+            msg = f'Unable to locate required file "{file}", halting all execution.'
             notify_warning(msg)
             log.error(msg)
             exit(1)
 
     log.info(f'All {len(files)} content and parity files found, proceeding.')
+
 
 #
 # Main
@@ -356,7 +362,8 @@ def main():
     (_, _, error_count, zero_subsecond_count) = get_status()
 
     if error_count > 0 and not force_script_execution:
-        msg = f'There are {error_count} errors in you array, you should review this immediately. All jobs have been halted.'
+        msg = f'There are {error_count} errors in you array, you should review this immediately. All jobs have been ' \
+              f'halted.'
         log.error(msg)
         notify_warning(msg)
         exit(1)
@@ -384,7 +391,8 @@ def main():
         if force_script_execution:
             log.info('Ignoring added threshold and forcefully proceeding.')
         elif 0 < added_threshold < diff_data["added"]:
-            msg = f'More files ({diff_data["added"]}) have been added than the configured max ({added_threshold}), not proceeding.'
+            msg = f'More files ({diff_data["added"]}) have been added than the configured max ({added_threshold}), ' \
+                  f'not proceeding.'
             log.error(msg)
             notify_warning(msg)
             exit(0)
@@ -401,7 +409,8 @@ def main():
             exit(0)
         else:
             log.info(
-                f'Fewer files removed ({diff_data["removed"]}) than the configured limit ({removed_threshold}), proceeding.')
+                f'Fewer files removed ({diff_data["removed"]}) than the configured limit ({removed_threshold}), '
+                f'proceeding.')
 
         sync_job_ran = True
         log.info(f'Running SnapRAID sync {"with" if config["prehash"] else "without"} pre-hashing...')
