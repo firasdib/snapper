@@ -148,7 +148,7 @@ def set_snapraid_priority():
     p.ionice(psutil.IOPRIO_CLASS_BE, math.floor((nice_level + 20) / 5))
 
 
-def run_snapraid(commands, stream_callback=None):
+def run_snapraid(commands, output_filter=None):
     snapraid_bin = config['snapraid_bin']
 
     if not os.path.isfile(snapraid_bin):
@@ -179,10 +179,10 @@ def run_snapraid(commands, stream_callback=None):
             if key.fileobj is process.stdout:
                 raw_log.info(data)
 
-                # `stream_callback` decides if we should include this data in stdout
+                # `output_filter` decides if we should include this data in stdout
                 # This is to avoid including all progress lines, which would take a lot of memory
 
-                if stream_callback is None or not stream_callback(data):
+                if output_filter is None or not output_filter(data):
                     std_out = std_out + data
             else:
                 raw_log.error(data)
@@ -287,7 +287,7 @@ def get_smart():
 
 def _run_sync(run_count):
     sync_output, sync_errors = run_snapraid(
-        ['sync', '-h'] if config['prehash'] else ['sync'], create_stream_callback())
+        ['sync', '-h'] if config['prehash'] else ['sync'], is_progress_output)
 
     # The three errors in the regex are considered "safe", i.e.,
     # a file was just modified or removed during the sync.
@@ -325,14 +325,14 @@ def run_scrub():
 
     if config['scrub_new']:
         log.info('Scrubbing new blocks...')
-        scrub_new_output, _ = run_snapraid(['scrub', '-p', 'new'], create_stream_callback())
+        scrub_new_output, _ = run_snapraid(['scrub', '-p', 'new'], is_progress_output)
 
         check_completed_status(scrub_new_output, 'SCRUB NEW')
 
     log.info('Scrubbing old blocks...')
     scrub_output, _ = run_snapraid(
         ['scrub', '-p', str(config['scrub_percent']), '-o', str(config['scrub_age'])],
-        create_stream_callback())
+        is_progress_output)
 
     end = datetime.now()
 
@@ -371,24 +371,10 @@ def sanity_check():
     log.info(f'All {len(files)} content and parity files found, proceeding.')
 
 
-def create_stream_callback():
-    callback_count = 0
+def is_progress_output(data):
+    is_progress = bool(re.search(r'^\d+%, \d+ MB', data))
 
-    def stream_callback(data):
-        is_progress = bool(re.search(r'^\d+%, \d+ MB', data))
-
-        if is_progress:
-            nonlocal callback_count
-
-            # Print the progress every so often to the main log file as well
-            if callback_count % 100:
-                log.info(data)
-
-            callback_count = callback_count + 1
-
-            return False
-
-    return stream_callback
+    return is_progress
 
 
 #
