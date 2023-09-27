@@ -133,9 +133,14 @@ def set_snapraid_priority():
     if not config['low_priority']:
         return
 
-    os.nice(15)
-    p = psutil.Process(os.getpid())
-    p.ionice(psutil.IOPRIO_CLASS_IDLE)
+    # Setting nice is enough, as ionice follows that per the documentation here:
+    # https://www.kernel.org/doc/Documentation/block/ioprio.txt
+    #
+    # The default class `IOPRIO_CLASS_BE` sets ionice as: `io_nice = (cpu_nice + 20) / 5.`
+    # The default nice is 0, which sets ionice to 4.
+    # We set nice to 10, which results in ionice of 6 - this way it's not entirely down prioritized.
+
+    os.nice(10)
 
 
 def run_snapraid(commands):
