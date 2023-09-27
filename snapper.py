@@ -1,4 +1,6 @@
+import gzip
 import selectors
+import shutil
 import psutil
 import subprocess
 import json
@@ -23,6 +25,14 @@ with open(get_relative_path(__file__, './config.json'), 'r') as f:
 #
 # Configure logging
 
+def rotator(source, dest):
+    with open(source, 'rb') as f_in:
+        with gzip.open(dest, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
+
+    os.remove(source)
+
+
 def setup_logger(name, log_file, level='INFO'):
     if not os.path.exists(config['log_dir']):
         os.makedirs(config['log_dir'])
@@ -32,6 +42,9 @@ def setup_logger(name, log_file, level='INFO'):
     handler = logging.handlers.RotatingFileHandler(log_file_path,
                                                    backupCount=max(config['log_count'], 1))
     handler.setFormatter(logging.Formatter('[%(asctime)s] - [%(levelname)s] - %(message)s'))
+
+    handler.rotator = rotator
+    handler.namer = lambda file_name: file_name + '.gz'
 
     if os.path.isfile(log_file_path):
         handler.doRollover()
