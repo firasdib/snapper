@@ -127,6 +127,15 @@ def is_running():
     return False
 
 
+def set_snapraid_priority():
+    if not config['low_priority']:
+        return
+
+    os.nice(15)
+    p = psutil.Process(os.getpid())
+    p.ionice(psutil.IOPRIO_CLASS_IDLE)
+
+
 def run_snapraid(commands):
     snapraid_bin = config['snapraid_bin']
 
@@ -136,7 +145,7 @@ def run_snapraid(commands):
     if is_running():
         raise ChildProcessError('SnapRAID already seems to be running, unable to proceed.')
 
-    result = subprocess.run([snapraid_bin] + commands, capture_output=True, text=True)
+    result = subprocess.run([snapraid_bin] + commands, capture_output=True, text=True, preexec_fn=set_snapraid_priority)
 
     raw_log.info(result.stdout)
 
@@ -153,7 +162,8 @@ def run_snapraid(commands):
         if snapraid_errors != '':
             raw_log.error(result.stderr)
 
-            raise SystemError(f'''A critical SnapRAID error was encountered during command "snapraid {' '.join(commands)}".
+            raise SystemError(
+                f'''A critical SnapRAID error was encountered during command "snapraid {' '.join(commands)}".
 Here's the first 100 characters:
 
 ```
@@ -163,7 +173,7 @@ ${snapraid_errors[0:100]}
 Execution has been halted.''')
 
     # diff returns code 2 if a sync is required
-    if result.returncode != 0 or (commands[0] == 'diff' and result.returncode != 2):
+    if result.returncode != 0 and not (commands[0] == 'diff' and result.returncode == 2):
         raise SystemError(f'SnapRAID exited with code {result.returncode}, please review the logs.')
 
     return result.stdout
