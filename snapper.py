@@ -7,6 +7,7 @@ import logging, logging.handlers
 import re
 import requests
 import argparse
+import math
 from datetime import datetime
 from reports.email_report import create_email_report
 from reports.discord_report import create_discord_report
@@ -141,7 +142,10 @@ def set_snapraid_priority():
     # The default nice is 0, which sets ionice to 4.
     # We set nice to 10, which results in ionice of 6 - this way it's not entirely down prioritized.
 
-    os.nice(10)
+    nice_level = 10
+    os.nice(nice_level)
+    p = psutil.Process(os.getpid())
+    p.ionice(psutil.IOPRIO_CLASS_BE, math.floor((nice_level + 20) / 5))
 
 
 def run_snapraid(commands, stream_callback=None):
