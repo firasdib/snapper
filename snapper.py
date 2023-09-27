@@ -1,3 +1,4 @@
+import selectors
 import psutil
 import subprocess
 import json
@@ -143,7 +144,7 @@ def set_snapraid_priority():
     os.nice(10)
 
 
-def run_snapraid(commands):
+def run_snapraid(commands, stream_callback=None):
     snapraid_bin = config['snapraid_bin']
 
     if not os.path.isfile(snapraid_bin):
@@ -152,35 +153,49 @@ def run_snapraid(commands):
     if is_running():
         raise ChildProcessError('SnapRAID already seems to be running, unable to proceed.')
 
-    result = subprocess.run([snapraid_bin] + commands, capture_output=True, text=True,
-                            preexec_fn=set_snapraid_priority)
+    process = subprocess.Popen([snapraid_bin] + commands, shell=False, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, preexec_fn=set_snapraid_priority)
 
-    raw_log.info(result.stdout)
+    std_out = ''
+    std_err = ''
 
-    if result.stderr:
-        raw_log.error(result.stderr)
+    sel = selectors.DefaultSelector()
+    sel.register(process.stdout, selectors.EVENT_READ)
+    sel.register(process.stderr, selectors.EVENT_READ)
 
-        # Remove all "acceptable" errors
-        # If there are errors that are not caught here, they are considered critical.
+    ok = True
+    while ok:
+        for key, _ in sel.select():
+            data = key.fileobj.read1().decode()
 
-        snapraid_errors = re.sub(
-            r"^(?:WARNING! (?:With \d+ disks it's recommended to use \w+ parity levels|You cannot "
-            r"modify data disk during a sync)|Rerun the sync command when finished|Missing file "
-            r".+)\.[\r\n]*$",
-            '', result.stderr, flags=re.IGNORECASE | re.MULTILINE)
+            if process.poll() is not None:
+                ok = False
+                break
 
-        if snapraid_errors != '':
-            raw_log.error(result.stderr)
+            if key.fileobj is process.stdout:
+                raw_log.info(data)
 
-            raise SystemError(f'''A critical SnapRAID error was encountered during command 
-            "snapraid {' '.join(commands)}". Here are the first 100 characters:\n```\n
-            {snapraid_errors[0:100]}\n```\n\nExecution has been halted.''')
+                # `stream_callback` decides if we should include this data in stdout
+                # This is to avoid including all progress lines, which would take a lot of memory
+
+                if stream_callback is None or not stream_callback(data):
+                    std_out = std_out + data
+            else:
+                raw_log.error(data)
+                std_err = std_err + data
+
+    rc = process.poll()
 
     # diff returns code 2 if a sync is required
-    if result.returncode != 0 and not (commands[0] == 'diff' and result.returncode == 2):
-        raise SystemError(f'SnapRAID exited with code {result.returncode}, please review the logs.')
+    if rc != 0 and not (commands[0] == 'diff' and rc == 2):
+        last_lines = '\n'.join(std_err.splitlines()[-10:])
 
-    return result.stdout, result.stderr
+        raise SystemError(f'A critical SnapRAID error was encountered during command'
+                          f'"snapraid {" ".join(commands)}". The process exited with code {rc}.\n'
+                          f'Here are the last 10 lines from the error log:\n```\n'
+                          f'{last_lines}\n```\n\nThis requires your immediate attention.')
+
+    return std_out, std_err
 
 
 def get_status():
@@ -268,22 +283,29 @@ def get_smart():
 
 def _run_sync(run_count):
     sync_output, sync_errors = run_snapraid(
-        ['sync', '-h', '-q'] if config['prehash'] else ['sync', '-q'])
+        ['sync', '-h'] if config['prehash'] else ['sync'], create_stream_callback())
 
-    check_completed_status(sync_output, 'SYNC')
+    # The three errors in the regex are considered "safe", i.e.,
+    # a file was just modified or removed during the sync.
+    #
+    # This is normally nothing to be worried about, and the operation can just be rerun.
+    # However, if there are other errors in the output, and not only these, we don't want to re-run
+    # the sync command, because it could be things we need to have a closer look at.
 
-    if re.search(r"^Rerun the sync command when finished", sync_errors,
-                 flags=re.MULTILINE | re.IGNORECASE):
-        log.info('SnapRAID has indicated another sync is recommended, likely due to files being '
+    bad_errors = re.sub(r"^(?:WARNING! You cannot modify (?:files|data disk) during a "
+                        r"sync|Missing file.+|Rerun the sync command when finished)\.[\r\n]*",
+                        '', sync_errors, flags=re.MULTILINE | re.IGNORECASE)
+    should_rerun = bad_errors == ''
+
+    if should_rerun == '':
+        log.info('SnapRAID has indicated another sync is recommended, due to disks or files being '
                  'modified during the sync process.')
 
-        if config['auto_resync']:
-            if run_count > config['max_resync_attempts']:
-                raise SystemError(
-                    'Too many attempts to resync the array, manual intervention recommended.')
-
-            log.info('Re-running sync command with identical options...')
-            _run_sync(run_count + 1)
+    if should_rerun and config['auto_resync'] and run_count < config['max_resync_attempts']:
+        log.info('Re-running sync command with identical options...')
+        _run_sync(run_count + 1)
+    else:
+        check_completed_status(sync_output, 'SYNC')
 
 
 def run_sync():
@@ -299,13 +321,14 @@ def run_scrub():
 
     if config['scrub_new']:
         log.info('Scrubbing new blocks...')
-        scrub_new_output, _ = run_snapraid(['scrub', '-p', 'new', '-q'])
+        scrub_new_output, _ = run_snapraid(['scrub', '-p', 'new'], create_stream_callback())
 
         check_completed_status(scrub_new_output, 'SCRUB NEW')
 
     log.info('Scrubbing old blocks...')
     scrub_output, _ = run_snapraid(
-        ['scrub', '-p', str(config['scrub_percent']), '-o', str(config['scrub_age']), '-q'])
+        ['scrub', '-p', str(config['scrub_percent']), '-o', str(config['scrub_age'])],
+        create_stream_callback())
 
     end = datetime.now()
 
@@ -319,8 +342,7 @@ def run_touch():
 
 
 def check_completed_status(message, job_type):
-    if not re.search(r'^Everything OK', message, flags=re.MULTILINE) and not re.search(
-            r'^Nothing to do', message, flags=re.MULTILINE):
+    if not re.search(r'^(?:Everything OK|Nothing to do)', message, flags=re.MULTILINE):
         raise SystemError(f'SnapRAID {job_type} job did not finish as expected, please check your '
                           f'logs. Remaining jobs have been cancelled.')
 
@@ -343,6 +365,26 @@ def sanity_check():
             raise FileNotFoundError('Unable to locate required content/parity file', file)
 
     log.info(f'All {len(files)} content and parity files found, proceeding.')
+
+
+def create_stream_callback():
+    callback_count = 0
+
+    def stream_callback(data):
+        is_progress = bool(re.search(r'^\d+%, \d+ MB', data))
+
+        if is_progress:
+            nonlocal callback_count
+
+            # Print the progress every so often to the main log file as well
+            if callback_count % 100:
+                log.info(data)
+
+            callback_count = callback_count + 1
+
+            return False
+
+    return stream_callback
 
 
 #
@@ -391,12 +433,13 @@ def main():
                  f'{diff_data["copied"]} copied, ' +
                  f'{diff_data["restored"]} restored')
 
-        if sum(diff_data.values()) - diff_data["equal"] > 0 or sync_in_progress or force_script_execution:
+        if sum(diff_data.values()) - diff_data["equal"] > 0 or sync_in_progress or \
+                force_script_execution:
             if force_script_execution:
                 log.info('Ignoring any thresholds and forcefully proceeding with sync.')
             elif 0 < added_threshold < diff_data["added"]:
-                raise ValueError(
-                    f'More files ({diff_data["added"]}) have been added than the configured max ({added_threshold})')
+                raise ValueError(f'More files ({diff_data["added"]}) have been added than the '
+                                 f'configured max ({added_threshold})')
             elif 0 < removed_threshold < diff_data["removed"]:
                 raise ValueError(
                     f'More files ({diff_data["removed"]}) have been removed than the configured '
@@ -404,8 +447,10 @@ def main():
             elif sync_in_progress:
                 log.info('A previous sync in progress has been detected, resuming.')
             else:
-                log.info(f'Fewer files added ({diff_data["added"]}) than the configured limit ({added_threshold}), proceeding.')
-                log.info(f'Fewer files removed ({diff_data["removed"]}) than the configured limit ({removed_threshold}), proceeding.')
+                log.info(f'Fewer files added ({diff_data["added"]}) than the configured '
+                         f'limit ({added_threshold}), proceeding.')
+                log.info(f'Fewer files removed ({diff_data["removed"]}) than the configured '
+                         f'limit ({removed_threshold}), proceeding.')
 
             log.info(f'Running SnapRAID sync {"with" if config["prehash"] else "without"} pre'
                      f'-hashing...')
