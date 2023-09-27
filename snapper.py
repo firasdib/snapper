@@ -38,6 +38,7 @@ def setup_logger(name, log_file, level='INFO'):
         os.makedirs(config['log_dir'])
 
     log_file_path = os.path.join(config['log_dir'], log_file)
+    needs_rollover = os.path.isfile(log_file_path)
 
     handler = logging.handlers.RotatingFileHandler(log_file_path,
                                                    backupCount=max(config['log_count'], 1))
@@ -46,7 +47,7 @@ def setup_logger(name, log_file, level='INFO'):
     handler.rotator = rotator
     handler.namer = lambda file_name: file_name + '.gz'
 
-    if os.path.isfile(log_file_path):
+    if needs_rollover:
         handler.doRollover()
 
     logger = logging.getLogger(name)
