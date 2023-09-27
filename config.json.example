@@ -2,6 +2,8 @@
   "snapraid_bin": "/usr/bin/snapraid",
   "snapraid_config_file": "/etc/snapraid.conf",
   "low_priority": false,
+  "auto_resync": false,
+  "max_resync_attempts": 3,
   "mail_bin": "/usr/bin/mailx",
   "from_email": "from@email.com",
   "to_email": "to@email.com",
