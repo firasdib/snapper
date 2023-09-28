@@ -82,10 +82,12 @@ force_script_execution = args['force']
 #
 # Helpers
 
-def notify_warning(message):
+def notify_and_handle_error(message):
     log.error(message)
     send_email('WARNING! SnapRAID jobs unsuccessful', message)
     send_discord(f':warning: [**WARNING!**] {message}')
+
+    exit(1)
 
 
 def notify_info(message):
@@ -556,14 +558,13 @@ def main():
 
         log.info('SnapRAID jobs completed successfully, exiting.')
     except (ValueError, ChildProcessError, SystemError) as err:
-        notify_warning(err.args[0])
+        notify_and_handle_error(err.args[0])
     except ConnectionError as err:
         log.error(str(err))
     except FileNotFoundError as err:
-        notify_warning(f'{err.args[0]} - missing file path `{err.args[1]}`')
+        notify_and_handle_error(f'{err.args[0]} - missing file path `{err.args[1]}`')
     except BaseException as error:
-        log.error(f"Unexpected error: {error}")
-        raise
+        notify_and_handle_error(f'Unexpected Python Error:\n```\n{error}\n```')
 
 
 main()
