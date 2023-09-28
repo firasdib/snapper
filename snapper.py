@@ -319,7 +319,7 @@ def handle_progress():
 
         progress_data = re.search(r'^(?P<progress>\d+)%, (?P<progress_mb>\d+) MB'
                                   r'(?:, (?P<speed_mb>\d+) MB/s, (?P<speed_stripe>\d+) stripe/s, '
-                                  r'CPU (?P<cpu>\d+)%, (?P<eta>\S+) ETA)?$', data, flags=re.MULTILINE)
+                                  r'CPU (?P<cpu>\d+)%, (?P<eta_h>\d+):(?P<eta_m>\d+) ETA)?$', data, flags=re.MULTILINE)
 
         is_progress = bool(progress_data)
 
@@ -328,7 +328,7 @@ def handle_progress():
 
             if not progress_data.group(3) is None:
                 msg = f'{msg} — processing at **{progress_data.group(3)} MB/s** (*{progress_data.group(4)} stripe/s, ' \
-                      f'{progress_data.group(5)}% CPU*). **ETA:** {progress_data.group(6)}'
+                      f'{progress_data.group(5)}% CPU*). **ETA:** {progress_data.group(6)}h {progress_data.group(7)}m'
 
             notify_info(msg)
 
