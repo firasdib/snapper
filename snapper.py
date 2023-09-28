@@ -1,5 +1,5 @@
 import argparse
-import codecs
+import concurrent.futures
 import gzip
 import json
 import logging
@@ -7,11 +7,8 @@ import logging.handlers
 import math
 import os
 import re
-import selectors
 import shutil
 import subprocess
-import threading
-import time
 import traceback
 from datetime import datetime, timedelta
 from operator import itemgetter
@@ -112,8 +109,8 @@ def notify_info(message, embeds=None, message_id=None):
 
 
 def send_discord(message, embeds=None, message_id=None):
-    is_enabled, webhook_id, webhook_token = itemgetter('enabled', 'webhook_id', 'webhook_token')(
-        config['notifications']['discord'])
+    is_enabled, webhook_id, webhook_token = itemgetter(
+        'enabled', 'webhook_id', 'webhook_token')(config['notifications']['discord'])
 
     if not is_enabled:
         return
@@ -153,8 +150,8 @@ def send_discord(message, embeds=None, message_id=None):
 def send_email(subject, message):
     log.debug('Attempting to send email...')
 
-    is_enabled, mail_bin, from_email, to_email = itemgetter('enabled', 'binary', 'from_email', 'to_email')(
-        config['notifications']['email'])
+    is_enabled, mail_bin, from_email, to_email = itemgetter(
+        'enabled', 'binary', 'from_email', 'to_email')(config['notifications']['email'])
 
     if not is_enabled:
         return
@@ -198,26 +195,6 @@ def set_snapraid_priority():
     p.ionice(psutil.IOPRIO_CLASS_BE, math.floor((nice_level + 20) / 5))
 
 
-def create_output_thread(read_file, output, progress_handler=None, is_std_err=False):
-    def output_thread():
-        for line in iter(read_file.readline, ""):
-            rline = line.rstrip()
-
-            if is_std_err:
-                raw_log.error(rline)
-                output.append(rline)
-            else:
-                raw_log.info(rline)
-
-                if progress_handler is None or not progress_handler(rline):
-                    output.append(rline)
-
-    thread = threading.Thread(target=output_thread, daemon=True)
-    thread.start()
-
-    return thread
-
-
 def run_snapraid(commands, progress_handler=None, allowed_return_codes=[]):
     snapraid_bin, snapraid_config = itemgetter('binary', 'config')(config['snapraid'])
 
@@ -227,23 +204,39 @@ def run_snapraid(commands, progress_handler=None, allowed_return_codes=[]):
     if is_running():
         raise ChildProcessError('SnapRAID already seems to be running, unable to proceed.')
 
-    process = subprocess.Popen([snapraid_bin] + commands + ['--conf', snapraid_config],
-                               shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               preexec_fn=set_snapraid_priority, encoding="utf-8", errors='replace')
-
     std_out = []
     std_err = []
 
-    threads = [
-        create_output_thread(process.stdout, std_out, progress_handler=progress_handler),
-        create_output_thread(process.stderr, std_err, is_std_err=True),
-    ]
+    with (subprocess.Popen(
+            [snapraid_bin] + commands + ['--conf', snapraid_config],
+            shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            preexec_fn=set_snapraid_priority, encoding="utf-8",
+            errors='replace'
+        ) as process,
+        concurrent.futures.ThreadPoolExecutor(2) as tpe,
+    ):
+        def read_stdout(file):
+            for line in file:
+                rline = line.rstrip()
 
-    for t in threads:
-        t.join()
+                raw_log.info(rline)
 
-    rc = process.wait()
-    time.sleep(1)
+                if progress_handler is None or not progress_handler(rline):
+                    std_out.append(rline)
+
+        def read_stderr(file):
+            for line in file:
+                rline = line.rstrip()
+
+                raw_log.error(rline)
+                std_err.append(rline)
+
+        f1 = tpe.submit(read_stdout, process.stdout)
+        f2 = tpe.submit(read_stderr, process.stderr)
+        f1.result()
+        f2.result()
+
+    rc = process.returncode
 
     if not (rc == 0 or rc in allowed_return_codes):
         last_lines = '\n'.join(std_err[-10:])
@@ -350,7 +343,8 @@ def handle_progress():
 
         progress_data = re.search(r'^(?P<progress>\d+)%, (?P<progress_mb>\d+) MB'
                                   r'(?:, (?P<speed_mb>\d+) MB/s, (?P<speed_stripe>\d+) stripe/s, '
-                                  r'CPU (?P<cpu>\d+)%, (?P<eta_h>\d+):(?P<eta_m>\d+) ETA)?$', data, flags=re.MULTILINE)
+                                  r'CPU (?P<cpu>\d+)%, (?P<eta_h>\d+):(?P<eta_m>\d+) ETA)?$', data,
+                                  flags=re.MULTILINE)
 
         is_progress = bool(progress_data)
 
@@ -358,8 +352,9 @@ def handle_progress():
             msg = f'Current progress **{progress_data.group(1)}%** (`{progress_data.group(2)} MB`)'
 
             if progress_data.group(3) is not None:
-                msg = f'{msg} — processing at **{progress_data.group(3)} MB/s** (*{progress_data.group(4)} stripe/s, ' \
-                      f'{progress_data.group(5)}% CPU*). **ETA:** {progress_data.group(6)}h {progress_data.group(7)}m'
+                msg = (f'{msg} — processing at **{progress_data.group(3)} MB/s** '
+                       f'(*{progress_data.group(4)} stripe/s, {progress_data.group(5)}% CPU*). '
+                       f'**ETA:** {progress_data.group(6)}h {progress_data.group(7)}m')
 
             if message_id is None:
                 message_id = notify_info(msg)
@@ -378,7 +373,8 @@ def _run_sync(run_count):
     auto_sync_enabled, max_attempts = itemgetter('enabled', 'max_attempts')(auto_sync)
 
     try:
-        log.info(f'Running SnapRAID sync ({run_count}) {"with" if pre_hash else "without"} pre-hashing...')
+        log.info(f'Running SnapRAID sync ({run_count}) '
+                 f'{"with" if pre_hash else "without"} pre-hashing...')
         notify_info(f'Syncing **({run_count})**...')
 
         run_snapraid(['sync', '-h'] if pre_hash else ['sync'], handle_progress())
@@ -392,7 +388,7 @@ def _run_sync(run_count):
         # a file was just modified or removed during the sync.
         #
         # This is normally nothing to be worried about, and the operation can just be rerun.
-        # However, if there are other errors in the output, and not only these, we don't want to re-run
+        # If there are other errors in the output, and not only these, we don't want to re-run
         # the sync command, because it could be things we need to have a closer look at.
 
         bad_errors = re.sub(r'^(?:WARNING! You cannot modify (?:files|data disk) during a sync|'
@@ -401,12 +397,14 @@ def _run_sync(run_count):
                             r'WARNING! With \d+ disks it\'s recommended to use \w+ parity levels'
                             r')\.[\r\n]*',
                             '', sync_errors, flags=re.MULTILINE | re.IGNORECASE)
-        should_rerun = bad_errors == '' and re.search(r'^Rerun the sync command when finished', sync_errors,
+        should_rerun = bad_errors == '' and re.search(r'^Rerun the sync command when finished',
+                                                      sync_errors,
                                                       flags=re.MULTILINE | re.IGNORECASE)
 
         if should_rerun:
-            log.info('SnapRAID has indicated another sync is recommended, due to disks or files being '
-                     'modified during the sync process.')
+            log.info(
+                'SnapRAID has indicated another sync is recommended, due to disks or files being '
+                'modified during the sync process.')
 
         if should_rerun and auto_sync_enabled and run_count < max_attempts:
             log.info('Re-running sync command with identical options...')
@@ -427,8 +425,8 @@ def run_sync():
 
 
 def run_scrub():
-    enabled, scrub_new, check_percent, min_age = itemgetter('enabled', 'scrub_new', 'check_percent', 'min_age')(
-        config['snapraid']['scrub'])
+    enabled, scrub_new, check_percent, min_age = itemgetter(
+        'enabled', 'scrub_new', 'check_percent', 'min_age')(config['snapraid']['scrub'])
 
     if not enabled:
         log.info('Scrubbing not enabled, skipping.')
@@ -611,7 +609,8 @@ def main():
     except FileNotFoundError as err:
         notify_and_handle_error(f'{err.args[0]} - missing file path `{err.args[1]}`', err)
     except BaseException as err:
-        notify_and_handle_error(f'Unhandled Python Exception `{str(err) if str(err) else "unknown error"}`', err)
+        notify_and_handle_error(
+            f'Unhandled Python Exception `{str(err) if str(err) else "unknown error"}`', err)
 
 
 main()
