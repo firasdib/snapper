@@ -1,4 +1,5 @@
 import argparse
+import codecs
 import gzip
 import json
 import logging
@@ -9,6 +10,8 @@ import re
 import selectors
 import shutil
 import subprocess
+import threading
+import time
 import traceback
 from datetime import datetime, timedelta
 from operator import itemgetter
@@ -98,7 +101,7 @@ def notify_and_handle_error(message, error):
     log.error(message)
     log.error(''.join(traceback.format_exception(None, error, error.__traceback__)))
 
-    send_email('WARNING! SnapRAID jobs unsuccessful', message)
+    send_email('WARNING! SnapRAID jobs unsuccessful', message.replace('\n', '<br>'))
     send_discord(f':warning: [**WARNING!**] {message}')
 
     exit(1)
@@ -195,8 +198,28 @@ def set_snapraid_priority():
     p.ionice(psutil.IOPRIO_CLASS_BE, math.floor((nice_level + 20) / 5))
 
 
-def run_snapraid(commands, progress_handler=None):
-    snapraid_bin = config['snapraid']['binary']
+def create_output_thread(read_file, output, progress_handler=None, is_std_err=False):
+    def output_thread():
+        for line in iter(read_file.readline, ""):
+            rline = line.rstrip()
+
+            if is_std_err:
+                raw_log.error(rline)
+                output.append(rline)
+            else:
+                raw_log.info(rline)
+
+                if progress_handler is None or not progress_handler(rline):
+                    output.append(rline)
+
+    thread = threading.Thread(target=output_thread, daemon=True)
+    thread.start()
+
+    return thread
+
+
+def run_snapraid(commands, progress_handler=None, allowed_return_codes=[]):
+    snapraid_bin, snapraid_config = itemgetter('binary', 'config')(config['snapraid'])
 
     if not os.path.isfile(snapraid_bin):
         raise FileNotFoundError('Unable to find SnapRAID executable', snapraid_bin)
@@ -204,51 +227,33 @@ def run_snapraid(commands, progress_handler=None):
     if is_running():
         raise ChildProcessError('SnapRAID already seems to be running, unable to proceed.')
 
-    process = subprocess.Popen([snapraid_bin] + commands, shell=False, stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, preexec_fn=set_snapraid_priority)
+    process = subprocess.Popen([snapraid_bin] + commands + ['--conf', snapraid_config],
+                               shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               preexec_fn=set_snapraid_priority, encoding="utf-8", errors='replace')
 
-    std_out = ''
-    std_err = ''
+    std_out = []
+    std_err = []
 
-    sel = selectors.DefaultSelector()
-    sel.register(process.stdout, selectors.EVENT_READ)
-    sel.register(process.stderr, selectors.EVENT_READ)
+    threads = [
+        create_output_thread(process.stdout, std_out, progress_handler=progress_handler),
+        create_output_thread(process.stderr, std_err, is_std_err=True),
+    ]
 
-    ok = True
-    while ok:
-        for key, _ in sel.select():
-            data = key.fileobj.read1().decode()
+    for t in threads:
+        t.join()
 
-            if process.poll() is not None:
-                ok = False
-                break
+    rc = process.wait()
+    time.sleep(1)
 
-            data = data.strip()
+    if not (rc == 0 or rc in allowed_return_codes):
+        last_lines = '\n'.join(std_err[-10:])
 
-            if key.fileobj is process.stdout:
-                raw_log.info(data)
-
-                # `progress_handler` decides if we should include this data in stdout
-                # This is to avoid including all progress lines, which would take a lot of memory
-
-                if progress_handler is None or not progress_handler(data):
-                    std_out = std_out + data + '\n'
-            else:
-                raw_log.error(data)
-                std_err = std_err + data + '\n'
-
-    rc = process.poll()
-
-    # diff returns code 2 if a sync is required
-    if rc != 0 and not (commands[0] == 'diff' and rc == 2):
-        last_lines = '\n'.join(std_err.splitlines()[-10:])
-
-        raise SystemError(f'A critical SnapRAID error was encountered during command'
+        raise SystemError(f'A critical SnapRAID error was encountered during command '
                           f'"snapraid {" ".join(commands)}". The process exited with code {rc}.\n'
-                          f'Here are the last 10 lines from the error log:\n```\n'
-                          f'{last_lines}\n```\n\nThis requires your immediate attention.', std_err)
+                          f'Here are the last **10 lines** from the error log:\n```\n'
+                          f'{last_lines}\n```\nThis requires your immediate attention.', std_err)
 
-    return std_out, std_err
+    return '\n'.join(std_out), '\n'.join(std_err)
 
 
 def get_status():
@@ -299,7 +304,7 @@ def get_status():
 
 
 def get_diff():
-    snapraid_diff, _ = run_snapraid(['diff'])
+    snapraid_diff, _ = run_snapraid(['diff'], allowed_return_codes=[2])
 
     diff_regex = re.compile(r'''^ *(?P<equal>\d+) equal$
 ^ *(?P<added>\d+) added$
@@ -606,7 +611,7 @@ def main():
     except FileNotFoundError as err:
         notify_and_handle_error(f'{err.args[0]} - missing file path `{err.args[1]}`', err)
     except BaseException as err:
-        notify_and_handle_error(f'Unhandled Python Exception `{str(err) if str(err) else "n/a"}`', err)
+        notify_and_handle_error(f'Unhandled Python Exception `{str(err) if str(err) else "unknown error"}`', err)
 
 
 main()
