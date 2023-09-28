@@ -1,19 +1,23 @@
+import argparse
 import gzip
+import json
+import logging
+import logging.handlers
+import math
+import os
+import re
 import selectors
 import shutil
-import psutil
 import subprocess
-import json
-import os
-import logging, logging.handlers
-import re
-import requests
-import argparse
-import math
 import traceback
 from datetime import datetime, timedelta
-from reports.email_report import create_email_report
+from operator import itemgetter
+
+import psutil
+import requests
+
 from reports.discord_report import create_discord_report
+from reports.email_report import create_email_report
 from utils import format_delta, get_relative_path
 
 #
@@ -35,14 +39,15 @@ def rotator(source, dest):
 
 
 def setup_logger(name, log_file, level='INFO'):
-    if not os.path.exists(config['log_dir']):
-        os.makedirs(config['log_dir'])
+    log_dir, max_count = itemgetter('dir', 'max_count')(config['logs'])
 
-    log_file_path = os.path.join(config['log_dir'], log_file)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    log_file_path = os.path.join(log_dir, log_file)
     needs_rollover = os.path.isfile(log_file_path)
 
-    handler = logging.handlers.RotatingFileHandler(log_file_path,
-                                                   backupCount=max(config['log_count'], 1))
+    handler = logging.handlers.RotatingFileHandler(log_file_path, backupCount=max(max_count, 1))
     handler.setFormatter(logging.Formatter('[%(asctime)s] - [%(levelname)s] - %(message)s'))
 
     handler.rotator = rotator
@@ -93,14 +98,15 @@ def notify_and_handle_error(message, error):
     exit(1)
 
 
-def notify_info(message):
-    send_discord(f':information_source: [**INFO**] {message}')
+def notify_info(message, embeds=None, message_id=None):
+    return send_discord(f':information_source: [**INFO**] {message}', embeds, message_id)
 
 
-def send_discord(message, embeds=None):
-    webhook_url = config['discord_webhook_url']
+def send_discord(message, embeds=None, message_id=None):
+    is_enabled, webhook_id, webhook_token = itemgetter('enabled', 'webhook_id', 'webhook_token')(
+        config['notifications']['discord'])
 
-    if webhook_url is None:
+    if not is_enabled:
         return
 
     if embeds is None:
@@ -112,12 +118,25 @@ def send_discord(message, embeds=None):
         'username': 'Snapper',
     }
 
-    result = requests.post(webhook_url, json=data)
+    update_message = message_id is not None
+    base_url = f'https://discord.com/api/webhooks/{webhook_id}/{webhook_token}'
+
+    if update_message:
+        discord_url = f'{base_url}/messages/{message_id}'
+        response = requests.patch(discord_url, json=data)
+    else:
+        discord_url = f'{base_url}?wait=true'
+        response = requests.post(discord_url, json=data)
 
     try:
-        result.raise_for_status()
-
+        response.raise_for_status()
         log.debug('Successfully posted message to discord')
+
+        if not update_message:
+            data = response.json()
+
+            # Return the message ID in case we want to manipulate it
+            return data['id']
     except requests.exceptions.HTTPError as err:
         raise ConnectionError('Unable to send message to discord') from err
 
@@ -125,9 +144,11 @@ def send_discord(message, embeds=None):
 def send_email(subject, message):
     log.debug('Attempting to send email...')
 
-    mail_bin = config['mail_bin']
-    from_email = config['from_email']
-    to_email = config['to_email']
+    is_enabled, mail_bin, from_email, to_email = itemgetter('enabled', 'binary', 'from_email', 'to_email')(
+        config['notifications']['mail'])
+
+    if not is_enabled:
+        return
 
     if not os.path.isfile(mail_bin):
         raise FileNotFoundError('Unable to find mail executable', mail_bin)
@@ -155,9 +176,6 @@ def is_running():
 
 
 def set_snapraid_priority():
-    if not config['low_priority']:
-        return
-
     # Setting nice is enough, as ionice follows that per the documentation here:
     # https://www.kernel.org/doc/Documentation/block/ioprio.txt
     #
@@ -165,14 +183,14 @@ def set_snapraid_priority():
     # The default nice is 0, which sets ionice to 4.
     # We set nice to 10, which results in ionice of 6 - this way it's not entirely down prioritized.
 
-    nice_level = 10
+    nice_level = config['snapraid']['nice']
     os.nice(nice_level)
     p = psutil.Process(os.getpid())
     p.ionice(psutil.IOPRIO_CLASS_BE, math.floor((nice_level + 20) / 5))
 
 
 def run_snapraid(commands, progress_handler=None):
-    snapraid_bin = config['snapraid_bin']
+    snapraid_bin = config['snapraid']['binary']
 
     if not os.path.isfile(snapraid_bin):
         raise FileNotFoundError('Unable to find SnapRAID executable', snapraid_bin)
@@ -313,9 +331,11 @@ def get_smart():
 
 def handle_progress():
     start = datetime.now()
+    message_id = None
 
     def handler(data):
         nonlocal start
+        nonlocal message_id
 
         progress_data = re.search(r'^(?P<progress>\d+)%, (?P<progress_mb>\d+) MB'
                                   r'(?:, (?P<speed_mb>\d+) MB/s, (?P<speed_stripe>\d+) stripe/s, '
@@ -323,14 +343,17 @@ def handle_progress():
 
         is_progress = bool(progress_data)
 
-        if is_progress and datetime.now() - start >= timedelta(minutes=30):
+        if is_progress and datetime.now() - start >= timedelta(minutes=1):
             msg = f'Current progress **{progress_data.group(1)}%** (`{progress_data.group(2)} MB`)'
 
-            if not progress_data.group(3) is None:
+            if progress_data.group(3) is not None:
                 msg = f'{msg} — processing at **{progress_data.group(3)} MB/s** (*{progress_data.group(4)} stripe/s, ' \
                       f'{progress_data.group(5)}% CPU*). **ETA:** {progress_data.group(6)}h {progress_data.group(7)}m'
 
-            notify_info(msg)
+            if message_id is None:
+                message_id = notify_info(msg)
+            else:
+                notify_info(msg, message_id=message_id)
 
             start = datetime.now()
 
@@ -340,9 +363,14 @@ def handle_progress():
 
 
 def _run_sync(run_count):
+    pre_hash, auto_sync = itemgetter('pre_hash', 'auto_sync')(config['snapraid']['sync'])
+    auto_sync_enabled, max_attempts = itemgetter('enabled', 'max_attempts')(auto_sync)
+
     try:
+        log.info(f'Running SnapRAID sync ({run_count}) {"with" if pre_hash else "without"} pre-hashing...')
         notify_info(f'Syncing **({run_count})**...')
-        run_snapraid(['sync', '-h'] if config['prehash'] else ['sync'], handle_progress())
+
+        run_snapraid(['sync', '-h'] if pre_hash else ['sync'], handle_progress())
     except SystemError as err:
         sync_errors = err.args[1]
 
@@ -369,7 +397,7 @@ def _run_sync(run_count):
             log.info('SnapRAID has indicated another sync is recommended, due to disks or files being '
                      'modified during the sync process.')
 
-        if should_rerun and config['auto_resync'] and run_count < config['max_resync_attempts']:
+        if should_rerun and auto_sync_enabled and run_count < max_attempts:
             log.info('Re-running sync command with identical options...')
             _run_sync(run_count + 1)
         else:
@@ -381,26 +409,41 @@ def run_sync():
     _run_sync(1)
     end = datetime.now()
 
-    return end - start
+    sync_job_time = format_delta(end - start)
+    log.info(f'Sync job finished, elapsed time {sync_job_time}')
+
+    return sync_job_time
 
 
 def run_scrub():
+    enabled, scrub_new, check_percent, min_age = itemgetter('enabled', 'scrub_new', 'check_percent', 'min_age')(
+        config['snapraid']['scrub'])
+
+    if not enabled:
+        log.info('Scrubbing not enabled, skipping.')
+
+        return None
+
+    log.info('Running scrub job...')
     notify_info('Scrubbing...')
 
     start = datetime.now()
 
-    if config['scrub_new']:
+    if scrub_new:
         log.info('Scrubbing new blocks...')
         scrub_new_output, _ = run_snapraid(['scrub', '-p', 'new'], handle_progress())
 
     log.info('Scrubbing old blocks...')
     scrub_output, _ = run_snapraid(
-        ['scrub', '-p', str(config['scrub_percent']), '-o', str(config['scrub_age'])],
+        ['scrub', '-p', str(check_percent), '-o', str(min_age)],
         handle_progress())
 
     end = datetime.now()
 
-    return end - start
+    scrub_job_time = format_delta(end - start)
+    log.info(f'Scrub job finished, elapsed time {scrub_job_time}')
+
+    return scrub_job_time
 
 
 def run_touch():
@@ -408,7 +451,7 @@ def run_touch():
 
 
 def sanity_check():
-    config_file = config['snapraid_config_file']
+    config_file = config['snapraid']['config']
 
     if not os.path.isfile(config_file):
         raise FileNotFoundError('Unable to find SnapRAID configuration', config_file)
@@ -432,12 +475,6 @@ def sanity_check():
 
 def main():
     try:
-        # Metadata for report
-        sync_job_time = None
-        scrub_job_time = None
-        sync_job_ran = False
-        scrub_job_ran = False
-
         total_start = datetime.now()
 
         log.info('Snapper started')
@@ -464,8 +501,6 @@ def main():
         log.info('Get SnapRAID diff...')
 
         diff_data = get_diff()
-        added_threshold = config['added_threshold']
-        removed_threshold = config['removed_threshold']
 
         log.info(f'Diff output: {diff_data["equal"]} equal, ' +
                  f'{diff_data["added"]} added, ' +
@@ -477,6 +512,9 @@ def main():
 
         if sum(diff_data.values()) - diff_data["equal"] > 0 or sync_in_progress or \
                 force_script_execution:
+            added_threshold, removed_threshold = itemgetter('added', 'removed')(
+                config['snapraid']['diff']['thresholds'])
+
             if force_script_execution:
                 log.info('Ignoring any thresholds and forcefully proceeding with sync.')
             elif 0 < added_threshold < diff_data["added"]:
@@ -494,25 +532,17 @@ def main():
                 log.info(f'Fewer files removed ({diff_data["removed"]}) than the configured '
                          f'limit ({removed_threshold}), proceeding.')
 
-            log.info(f'Running SnapRAID sync {"with" if config["prehash"] else "without"} pre'
-                     f'-hashing...')
-            elapsed_time = run_sync()
-            sync_job_time = format_delta(elapsed_time)
-            log.info(f'Sync job finished, elapsed time {sync_job_time}')
-
+            sync_job_time = run_sync()
             sync_job_ran = True
         else:
             log.info('No changes to sync, skipping.')
+            notify_info('No changes to sync')
 
-        if config['scrub_percent'] > 0:
-            log.info('Running scrub job...')
-            elapsed_time = run_scrub()
-            scrub_job_time = format_delta(elapsed_time)
-            log.info(f'Scrub job finished, elapsed time {scrub_job_time}')
+            sync_job_ran = False
+            sync_job_time = None
 
-            scrub_job_ran = True
-        else:
-            log.info('Scrubbing not enabled, skipping.')
+        scrub_job_time = run_scrub()
+        scrub_job_ran = scrub_job_time is not None
 
         log.info('Fetching SnapRAID status...')
         (drive_stats, scrub_stats, error_count, _, _) = get_status()
@@ -545,7 +575,7 @@ def main():
 
         send_email('SnapRAID Job Completed Successfully', email_report)
 
-        if not config['discord_webhook_url'] is None:
+        if config['notifications']['discord']['enabled']:
             (discord_message, embeds) = create_discord_report(
                 sync_job_ran,
                 scrub_job_ran,

@@ -37,22 +37,26 @@ A `config.json` file is required and expected to be in the same root as this scr
 
 The different values are explained below:
 
-| Option                 | Explanation                                                                                                | Type    |
-|------------------------|------------------------------------------------------------------------------------------------------------|---------|
-| `snapraid_bin`         | The location of your snapraid executable                                                                   | String  |
-| `snapraid_config_file` | Location of the snapraid config file. Necessary for sanity checks.                                         | String  |
-| `low_priority`         | Run snapraid at a lower priority                                                                           | Boolean |
-| `auto_resync`          | Whether or not to re-run the sync command if snapraid recommends it                                        | Boolean |
-| `max_resync_attempts`  | Only relevant if `auto_resync` is enabled. The max amount of attempts to resync the array before bailing.  | Number  |
-| `mail_bin`             | The location of mailx                                                                                      | String  |
-| `from_email`           | The senders email                                                                                          | String  |
-| `to_email`             | The recipients email                                                                                       | String  |                                                       
-| `log_dir`              | The directory in which to save logs. Will be created if it does not exist.                                 | String  |
-| `log_count`            | How many historic logs to keep                                                                             | Number  |
-| `added_threshold`      | If more files than the threshold amount have been added, don't execute jobs. Set to `0` to disable.        | Number  |
-| `removed_threshold`    | If more files than the threshold amount have been removed, don't execute jobs. Set to `0` to disable.      | Number  |
-| `scrub_percent`        | How many percent of the array to scrub each time. Set to `0` to disable scrubbing.                         | Number  |
-| `scrub_age`            | How old the blocks have to be before considered for scrub, in days.                                        | Number  |
-| `scrub_new`            | Whether to scrub new blocks or not.                                                                        | Boolean |
-| `prehash`              | Wheter to pre-hash changed blocks before syncing                                                           | Boolean |
-| `discord_webhook_url`  | Discord Webhook Url for discord notifications and reporting. Set to `null` to disable.                     | String  |
+| Option                                 | Explanation                                                                                           | Type    |
+|----------------------------------------|-------------------------------------------------------------------------------------------------------|---------|
+| `snapraid.binary`                      | The location of your snapraid executable                                                              | String  |
+| `snapraid.config`                      | Location of the snapraid config file. Necessary for sanity checks.                                    | String  |
+| `snapraid.nice`                        | Run snapraid at a given `nice`. Default processes run at 0.                                           | Number  |
+| `snapraid.diff.thresholds.added`       | If more files than the threshold amount have been added, don't execute jobs. Set to `0` to disable.   | Number  |
+| `snapraid.diff.thresholds.removed`     | If more files than the threshold amount have been removed, don't execute jobs. Set to `0` to disable. | Number  |
+| `snapraid.sync.pre_hash`               | Wheter to pre-hash changed blocks before syncing                                                      | Boolean |
+| `snapraid.sync.auto_sync.enabled`      | Whether or not to re-run the sync command if snapraid recommends it                                   | Boolean |
+| `snapraid.sync.auto_sync.max_attempts` | The max amount of attempts to `sync` the array before bailing.                                        | Number  |
+| `snapraid.scrub.enabled`               | Whether or not to scrub the array.                                                                    | Boolean |
+| `snapraid.scrub.check_percent`         | How many percent of the array to scrub each time. Set to `0` to disable scrubbing.                    | Number  |
+| `snapraid.scrub.min_age`               | How old the blocks have to be before considered for scrub, in days.                                   | Number  |
+| `snapraid.scrub.scrub_new`             | Whether to scrub new blocks or not.                                                                   | Boolean |
+| `notifications.email.enabled`          | Whether or not to send notifications to the defined email                                             | Boolean |
+| `notifications.email.binary`           | The location of `mailx`                                                                               | String  |
+| `notifications.email.from_email`       | The senders email                                                                                     | String  |
+| `notifications.email.to_email`         | The recipients email                                                                                  | String  |                                                       
+| `notifications.discord.enabled`        | Whether or not to send notifications to Discord                                                       | Boolean |
+| `notifications.discord.webhook_id`     | Discord webhook id                                                                                    | String  |
+| `notifications.discord.webhook_token`  | Discord webhook token                                                                                 | String  |
+| `logs.dir`                             | The directory in which to save logs. Will be created if it does not exist.                            | String  |
+| `logs.max_count`                       | How many historic logs to keep                                                                        | Number  |
