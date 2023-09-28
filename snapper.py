@@ -196,17 +196,19 @@ def run_snapraid(commands, progress_handler=None):
                 ok = False
                 break
 
+            data = data.strip()
+
             if key.fileobj is process.stdout:
-                raw_log.info(data.strip())
+                raw_log.info(data)
 
                 # `progress_handler` decides if we should include this data in stdout
                 # This is to avoid including all progress lines, which would take a lot of memory
 
                 if progress_handler is None or not progress_handler(data):
-                    std_out = std_out + data
+                    std_out = std_out + data + '\n'
             else:
-                raw_log.error(data.strip())
-                std_err = std_err + data
+                raw_log.error(data)
+                std_err = std_err + data + '\n'
 
     rc = process.poll()
 
@@ -313,16 +315,16 @@ def handle_progress():
 
         progress_data = re.search(r'^(?P<progress>\d+)%, (?P<progress_mb>\d+) MB'
                                   r'(?:, (?P<speed_mb>\d+) MB/s, (?P<speed_stripe>\d+) stripe/s, '
-                                  r'CPU (?P<cpu>\d+)%, (?P<eta>\S+) ETA$)?', data, flags=re.MULTILINE)
+                                  r'CPU (?P<cpu>\d+)%, (?P<eta>\S+) ETA)?$', data, flags=re.MULTILINE)
 
         is_progress = bool(progress_data)
 
         if is_progress and datetime.now() - start >= timedelta(minutes=30):
-            msg = f'Current progress: {progress_data.group(1)}% ({progress_data.group(2)} MB)'
+            msg = f'Current progress **{progress_data.group(1)}%** (`{progress_data.group(2)} MB`)'
 
             if not progress_data.group(3) is None:
-                msg = f'{msg} - processing at {progress_data.group(3)} MB/s ({progress_data.group(4)} stripe/s, ' \
-                      f'{progress_data.group(5)}% CPU). ETA: {progress_data.group(6)}'
+                msg = f'{msg} — processing at **{progress_data.group(3)} MB/s** (*{progress_data.group(4)} stripe/s, ' \
+                      f'{progress_data.group(5)}% CPU*). **ETA:** {progress_data.group(6)}'
 
             notify_info(msg)
 
@@ -335,7 +337,7 @@ def handle_progress():
 
 def _run_sync(run_count):
     try:
-        notify_info(f'Syncing ({run_count})...')
+        notify_info(f'Syncing **({run_count})**...')
         run_snapraid(['sync', '-h'] if config['prehash'] else ['sync'], handle_progress())
     except SystemError as err:
         sync_errors = err.args[1]
