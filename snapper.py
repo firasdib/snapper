@@ -231,7 +231,7 @@ def get_status():
     snapraid_status, _ = run_snapraid(['status'])
 
     stats_regex = re.compile(
-        r'^ +(?P<file_count>\d+) +(?P<fragmented_files>\d+) +(?P<excess_fragments>\d+) +('
+        r'^ *(?P<file_count>\d+) +(?P<fragmented_files>\d+) +(?P<excess_fragments>\d+) +('
         r'?P<wasted_gb>[-.\d]+) +(?P<used_gb>\d+) +(?P<free_gb>\d+) +(?P<use_percent>\d+)%(?: +('
         r'?P<drive_name>\S+)|$)',
         flags=re.MULTILINE)
@@ -298,7 +298,7 @@ def get_diff():
 def get_smart():
     smart_data, _ = run_snapraid(['smart'])
 
-    drive_regex = re.compile(r'^ +(?P<temp>\d+|-) +(?P<power_on_days>\d+|-) +('
+    drive_regex = re.compile(r'^ *(?P<temp>\d+|-) +(?P<power_on_days>\d+|-) +('
                              r'?P<error_count>\d+|-) +(?P<fp>\d+%|-|SSD) +(?P<size>\S+) +('
                              r'?P<serial>\S+) +(?P<device>\S+) +(?P<disk>\S+)$', flags=re.MULTILINE)
     drive_data = [m.groupdict() for m in drive_regex.finditer(smart_data)]
