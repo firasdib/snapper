@@ -15,6 +15,7 @@ from operator import itemgetter
 
 import psutil
 import requests
+import pidfile
 from jsonschema import validate
 
 from reports.discord_report import create_discord_report
@@ -73,11 +74,6 @@ def setup_logger(name, log_file, level='INFO'):
 
     return logger
 
-
-raw_log = setup_logger('snapper_raw', 'snapper_raw.log')
-log = setup_logger('snapper', 'snapper.log')
-log.handlers = raw_log.handlers + log.handlers
-log.addHandler(logging.StreamHandler())
 
 #
 # Parse command line args
@@ -613,4 +609,15 @@ def main():
             f'Unhandled Python Exception `{str(err) if str(err) else "unknown error"}`', err)
 
 
-main()
+try:
+    with pidfile.PIDFile('/tmp/snapper.pid'):
+        # Setup loggers after pidfile has been acquired
+        raw_log = setup_logger('snapper_raw', 'snapper_raw.log')
+        log = setup_logger('snapper', 'snapper.log')
+        
+        log.handlers = raw_log.handlers + log.handlers
+        log.addHandler(logging.StreamHandler())
+
+        main()
+except pidfile.AlreadyRunningError:
+    print('snapper already appears to be running!')
