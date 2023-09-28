@@ -211,7 +211,7 @@ def run_snapraid(commands, output_filter=None):
         raise SystemError(f'A critical SnapRAID error was encountered during command'
                           f'"snapraid {" ".join(commands)}". The process exited with code {rc}.\n'
                           f'Here are the last 10 lines from the error log:\n```\n'
-                          f'{last_lines}\n```\n\nThis requires your immediate attention.')
+                          f'{last_lines}\n```\n\nThis requires your immediate attention.', std_err)
 
     return std_out, std_err
 
@@ -300,30 +300,38 @@ def get_smart():
 
 
 def _run_sync(run_count):
-    sync_output, sync_errors = run_snapraid(
-        ['sync', '-h'] if config['prehash'] else ['sync'], is_progress_output)
+    try:
+        run_snapraid(['sync', '-h'] if config['prehash'] else ['sync'], is_progress_output)
+    except SystemError as err:
+        sync_errors = err.args[1]
 
-    # The three errors in the regex are considered "safe", i.e.,
-    # a file was just modified or removed during the sync.
-    #
-    # This is normally nothing to be worried about, and the operation can just be rerun.
-    # However, if there are other errors in the output, and not only these, we don't want to re-run
-    # the sync command, because it could be things we need to have a closer look at.
+        if sync_errors is None:
+            raise err
 
-    bad_errors = re.sub(r"^(?:WARNING! You cannot modify (?:files|data disk) during a "
-                        r"sync|Missing file.+|Rerun the sync command when finished)\.[\r\n]*",
-                        '', sync_errors, flags=re.MULTILINE | re.IGNORECASE)
-    should_rerun = bad_errors == ''
+        # The three errors in the regex are considered "safe", i.e.,
+        # a file was just modified or removed during the sync.
+        #
+        # This is normally nothing to be worried about, and the operation can just be rerun.
+        # However, if there are other errors in the output, and not only these, we don't want to re-run
+        # the sync command, because it could be things we need to have a closer look at.
 
-    if should_rerun == '':
-        log.info('SnapRAID has indicated another sync is recommended, due to disks or files being '
-                 'modified during the sync process.')
+        bad_errors = re.sub(r'^(?:WARNING! You cannot modify (?:files|data disk) during a sync|'
+                            r'Missing file .+|'
+                            r'Rerun the sync command when finished|'
+                            r'WARNING! With \d+ disks it\'s recommended to use \w+ parity levels'
+                            r')\.[\r\n]*',
+                            '', sync_errors, flags=re.MULTILINE | re.IGNORECASE)
+        should_rerun = bad_errors == ''
 
-    if should_rerun and config['auto_resync'] and run_count < config['max_resync_attempts']:
-        log.info('Re-running sync command with identical options...')
-        _run_sync(run_count + 1)
-    else:
-        check_completed_status(sync_output, 'SYNC')
+        if should_rerun == '':
+            log.info('SnapRAID has indicated another sync is recommended, due to disks or files being '
+                     'modified during the sync process.')
+
+        if should_rerun and config['auto_resync'] and run_count < config['max_resync_attempts']:
+            log.info('Re-running sync command with identical options...')
+            _run_sync(run_count + 1)
+        else:
+            raise err
 
 
 def run_sync():
@@ -341,8 +349,6 @@ def run_scrub():
         log.info('Scrubbing new blocks...')
         scrub_new_output, _ = run_snapraid(['scrub', '-p', 'new'], is_progress_output)
 
-        check_completed_status(scrub_new_output, 'SCRUB NEW')
-
     log.info('Scrubbing old blocks...')
     scrub_output, _ = run_snapraid(
         ['scrub', '-p', str(config['scrub_percent']), '-o', str(config['scrub_age'])],
@@ -350,19 +356,11 @@ def run_scrub():
 
     end = datetime.now()
 
-    check_completed_status(scrub_output, 'SCRUB')
-
     return end - start
 
 
 def run_touch():
     run_snapraid(['touch'])
-
-
-def check_completed_status(message, job_type):
-    if not re.search(r'^(?:Everything OK|Nothing to do)', message, flags=re.MULTILINE):
-        raise SystemError(f'SnapRAID {job_type} job did not finish as expected, please check your '
-                          f'logs. Remaining jobs have been cancelled.')
 
 
 def sanity_check():
