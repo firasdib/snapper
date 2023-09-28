@@ -195,7 +195,7 @@ def run_snapraid(commands, progress_handler=None):
                 break
 
             if key.fileobj is process.stdout:
-                raw_log.info(data)
+                raw_log.info(data.strip())
 
                 # `progress_handler` decides if we should include this data in stdout
                 # This is to avoid including all progress lines, which would take a lot of memory
@@ -203,7 +203,7 @@ def run_snapraid(commands, progress_handler=None):
                 if progress_handler is None or not progress_handler(data):
                     std_out = std_out + data
             else:
-                raw_log.error(data)
+                raw_log.error(data.strip())
                 std_err = std_err + data
 
     rc = process.poll()
@@ -318,7 +318,7 @@ def handle_progress():
         if is_progress and datetime.now() - start >= timedelta(minutes=30):
             msg = f'Current progress: {progress_data.group(1)}% ({progress_data.group(2)} MB)'
 
-            if len(progress_data.groups()) > 2:
+            if not progress_data.group(3) is None:
                 msg = f'{msg} - processing at {progress_data.group(3)} MB/s ({progress_data.group(4)} stripe/s, ' \
                       f'{progress_data.group(5)}% CPU). ETA: {progress_data.group(6)}'
 
