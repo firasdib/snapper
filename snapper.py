@@ -145,7 +145,7 @@ def send_email(subject, message):
     log.debug('Attempting to send email...')
 
     is_enabled, mail_bin, from_email, to_email = itemgetter('enabled', 'binary', 'from_email', 'to_email')(
-        config['notifications']['mail'])
+        config['notifications']['email'])
 
     if not is_enabled:
         return
