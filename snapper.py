@@ -10,7 +10,7 @@ import re
 import requests
 import argparse
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 from reports.email_report import create_email_report
 from reports.discord_report import create_discord_report
 from utils import format_delta, get_relative_path
@@ -88,6 +88,10 @@ def notify_warning(message):
     send_discord(f':warning: [**WARNING!**] {message}')
 
 
+def notify_info(message):
+    send_discord(f':information_source: [**INFO**] {message}')
+
+
 def send_discord(message, embeds=None):
     webhook_url = config['discord_webhook_url']
 
@@ -108,7 +112,7 @@ def send_discord(message, embeds=None):
     try:
         result.raise_for_status()
 
-        log.info('Successfully posted message to discord')
+        log.debug('Successfully posted message to discord')
     except requests.exceptions.HTTPError as err:
         raise ConnectionError('Unable to send message to discord') from err
 
@@ -134,7 +138,7 @@ def send_email(subject, message):
     if result.stderr:
         raise ConnectionError('Unable to send email', result.stderr)
 
-    log.info(f'Successfully sent email to {to_email}')
+    log.debug(f'Successfully sent email to {to_email}')
 
 
 def is_running():
@@ -162,7 +166,7 @@ def set_snapraid_priority():
     p.ionice(psutil.IOPRIO_CLASS_BE, math.floor((nice_level + 20) / 5))
 
 
-def run_snapraid(commands, output_filter=None):
+def run_snapraid(commands, progress_handler=None):
     snapraid_bin = config['snapraid_bin']
 
     if not os.path.isfile(snapraid_bin):
@@ -193,10 +197,10 @@ def run_snapraid(commands, output_filter=None):
             if key.fileobj is process.stdout:
                 raw_log.info(data)
 
-                # `output_filter` decides if we should include this data in stdout
+                # `progress_handler` decides if we should include this data in stdout
                 # This is to avoid including all progress lines, which would take a lot of memory
 
-                if output_filter is None or not output_filter(data):
+                if progress_handler is None or not progress_handler(data):
                     std_out = std_out + data
             else:
                 raw_log.error(data)
@@ -299,9 +303,38 @@ def get_smart():
     return drive_data, global_fp
 
 
+def handle_progress():
+    start = datetime.now()
+
+    def handler(data):
+        nonlocal start
+
+        progress_data = re.search(r'^(?P<progress>\d+)%, (?P<progress_mb>\d+) MB'
+                                  r'(?:, (?P<speed_mb>\d+) MB/s, (?P<speed_stripe>\d+) stripe/s, '
+                                  r'CPU (?P<cpu>\d+)%, (?P<eta>\S+) ETA$)?', data, flags=re.MULTILINE)
+
+        is_progress = bool(progress_data)
+
+        if is_progress and datetime.now() - start >= timedelta(minutes=30):
+            msg = f'Current progress: {progress_data.group(1)}% ({progress_data.group(2)} MB)'
+
+            if len(progress_data.groups()) > 2:
+                msg = f'{msg} - processing at {progress_data.group(3)} MB/s ({progress_data.group(4)} stripe/s). ' \
+                      f'ETA: {progress_data.group(5)}'
+
+            notify_info(msg)
+
+            start = datetime.now()
+
+        return is_progress
+
+    return handler
+
+
 def _run_sync(run_count):
     try:
-        run_snapraid(['sync', '-h'] if config['prehash'] else ['sync'], is_progress_output)
+        notify_info(f'Syncing ({run_count})...')
+        run_snapraid(['sync', '-h'] if config['prehash'] else ['sync'], handle_progress())
     except SystemError as err:
         sync_errors = err.args[1]
 
@@ -321,9 +354,10 @@ def _run_sync(run_count):
                             r'WARNING! With \d+ disks it\'s recommended to use \w+ parity levels'
                             r')\.[\r\n]*',
                             '', sync_errors, flags=re.MULTILINE | re.IGNORECASE)
-        should_rerun = bad_errors == ''
+        should_rerun = bad_errors == '' and re.search(r'^Rerun the sync command when finished', sync_errors,
+                                                      flags=re.MULTILINE | re.IGNORECASE)
 
-        if should_rerun == '':
+        if should_rerun:
             log.info('SnapRAID has indicated another sync is recommended, due to disks or files being '
                      'modified during the sync process.')
 
@@ -343,16 +377,18 @@ def run_sync():
 
 
 def run_scrub():
+    notify_info('Scrubbing...')
+
     start = datetime.now()
 
     if config['scrub_new']:
         log.info('Scrubbing new blocks...')
-        scrub_new_output, _ = run_snapraid(['scrub', '-p', 'new'], is_progress_output)
+        scrub_new_output, _ = run_snapraid(['scrub', '-p', 'new'], handle_progress())
 
     log.info('Scrubbing old blocks...')
     scrub_output, _ = run_snapraid(
         ['scrub', '-p', str(config['scrub_percent']), '-o', str(config['scrub_age'])],
-        is_progress_output)
+        handle_progress())
 
     end = datetime.now()
 
@@ -383,12 +419,6 @@ def sanity_check():
     log.info(f'All {len(files)} content and parity files found, proceeding.')
 
 
-def is_progress_output(data):
-    is_progress = bool(re.search(r'^\d+%, \d+ MB', data))
-
-    return is_progress
-
-
 #
 # Main
 
@@ -403,6 +433,8 @@ def main():
         total_start = datetime.now()
 
         log.info('Snapper started')
+        notify_info('Starting SnapRAID jobs...')
+
         log.info('Running sanity checks...')
 
         if not force_script_execution:
@@ -529,6 +561,9 @@ def main():
         log.error(str(err))
     except FileNotFoundError as err:
         notify_warning(f'{err.args[0]} - missing file path `{err.args[1]}`')
+    except BaseException as error:
+        log.error(f"Unexpected error: {error}")
+        raise
 
 
 main()
