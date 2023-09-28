@@ -16,6 +16,7 @@ The reason I created this is that I wanted more granular control of how my setup
 - Allows you to `scrub` after `sync`
 - Logs the raw snapraid output as well as formatted text
 - Creates a nicely formatted report and sends it via email or discord
+- Provides live insight into the sync/scrub process in Discord
 
 **This project is a work in progress, and can change at any time.**
 
