@@ -10,6 +10,7 @@ import re
 import requests
 import argparse
 import math
+import traceback
 from datetime import datetime, timedelta
 from reports.email_report import create_email_report
 from reports.discord_report import create_discord_report
@@ -82,8 +83,10 @@ force_script_execution = args['force']
 #
 # Helpers
 
-def notify_and_handle_error(message):
+def notify_and_handle_error(message, error):
     log.error(message)
+    log.error(''.join(traceback.format_exception(None, error, error.__traceback__)))
+
     send_email('WARNING! SnapRAID jobs unsuccessful', message)
     send_discord(f':warning: [**WARNING!**] {message}')
 
@@ -120,7 +123,7 @@ def send_discord(message, embeds=None):
 
 
 def send_email(subject, message):
-    log.info('Attempting to send email...')
+    log.debug('Attempting to send email...')
 
     mail_bin = config['mail_bin']
     from_email = config['from_email']
@@ -274,19 +277,20 @@ def get_status():
 def get_diff():
     snapraid_diff, _ = run_snapraid(['diff'])
 
-    diff_regex = re.compile(r'''^ +(?P<equal>\d+) equal$
-^ +(?P<added>\d+) added$
-^ +(?P<removed>\d+) removed$
-^ +(?P<updated>\d+) updated$
-^ +(?P<moved>\d+) moved$
-^ +(?P<copied>\d+) copied$
-^ +(?P<restored>\d+) restored$''', flags=re.MULTILINE)
-    [diff_data] = [m.groupdict() for m in diff_regex.finditer(snapraid_diff)]
+    diff_regex = re.compile(r'''^ *(?P<equal>\d+) equal$
+^ *(?P<added>\d+) added$
+^ *(?P<removed>\d+) removed$
+^ *(?P<updated>\d+) updated$
+^ *(?P<moved>\d+) moved$
+^ *(?P<copied>\d+) copied$
+^ *(?P<restored>\d+) restored$''', flags=re.MULTILINE)
 
-    if diff_data is None:
+    diff_data = [m.groupdict() for m in diff_regex.finditer(snapraid_diff)]
+
+    if len(diff_data) == 0:
         raise ValueError('Unable to parse diff output from SnapRAID, not proceeding.')
 
-    diff_int = dict([a, int(x)] for a, x in diff_data.items())
+    diff_int = dict([a, int(x)] for a, x in diff_data[0].items())
 
     return diff_int
 
@@ -560,13 +564,13 @@ def main():
 
         log.info('SnapRAID jobs completed successfully, exiting.')
     except (ValueError, ChildProcessError, SystemError) as err:
-        notify_and_handle_error(err.args[0])
+        notify_and_handle_error(err.args[0], err)
     except ConnectionError as err:
         log.error(str(err))
     except FileNotFoundError as err:
-        notify_and_handle_error(f'{err.args[0]} - missing file path `{err.args[1]}`')
-    except BaseException as error:
-        notify_and_handle_error(f'Unexpected Python Error:\n```\n{error}\n```')
+        notify_and_handle_error(f'{err.args[0]} - missing file path `{err.args[1]}`', err)
+    except BaseException as err:
+        notify_and_handle_error(f'Unhandled Python Exception `{str(err) if str(err) else "n/a"}`', err)
 
 
 main()
