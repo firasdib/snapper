@@ -319,8 +319,8 @@ def handle_progress():
             msg = f'Current progress: {progress_data.group(1)}% ({progress_data.group(2)} MB)'
 
             if len(progress_data.groups()) > 2:
-                msg = f'{msg} - processing at {progress_data.group(3)} MB/s ({progress_data.group(4)} stripe/s). ' \
-                      f'ETA: {progress_data.group(5)}'
+                msg = f'{msg} - processing at {progress_data.group(3)} MB/s ({progress_data.group(4)} stripe/s, ' \
+                      f'{progress_data.group(5)}% CPU). ETA: {progress_data.group(6)}'
 
             notify_info(msg)
 
