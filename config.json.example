@@ -32,8 +32,8 @@
     },
     "discord": {
       "enabled": false,
-      "webhook_id": null,
-      "webhook_token": null
+      "webhook_id": "",
+      "webhook_token": ""
     }
   },
   "logs": {

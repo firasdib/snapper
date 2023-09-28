@@ -15,6 +15,7 @@ from operator import itemgetter
 
 import psutil
 import requests
+from jsonschema import validate
 
 from reports.discord_report import create_discord_report
 from reports.email_report import create_email_report
@@ -25,6 +26,11 @@ from utils import format_delta, get_relative_path
 
 with open(get_relative_path(__file__, './config.json'), 'r') as f:
     config = json.load(f)
+
+with open(get_relative_path(__file__, './config.schema.json'), 'r') as f:
+    schema = json.load(f)
+
+validate(instance=config, schema=schema)
 
 
 #

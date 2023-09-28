@@ -1,0 +1,227 @@
+{
+  "type": "object",
+  "properties": {
+    "snapraid": {
+      "type": "object",
+      "properties": {
+        "binary": {
+          "type": "string",
+          "examples": [
+            "/usr/bin/snapraid"
+          ],
+          "description": "The location of your snapraid executable."
+        },
+        "config": {
+          "type": "string",
+          "examples": [
+            "/etc/snapraid.conf"
+          ],
+          "description": "Location of the snapraid config file. Necessary for sanity checks."
+        },
+        "nice": {
+          "type": "number",
+          "examples": [
+            10
+          ],
+          "description": "Run snapraid at a given `nice`. By default processes run at `0`. Lower values mean higher priority. Ranges between -20 to +19.",
+          "minimum": -20,
+          "maximum": 19
+        },
+        "diff": {
+          "type": "object",
+          "properties": {
+            "thresholds": {
+              "type": "object",
+              "properties": {
+                "added": {
+                  "type": "number",
+                  "examples": [
+                    500
+                  ],
+                  "description": "If more files than the threshold amount have been added, don't execute jobs. Set to `0` to disable.",
+                  "minimum": 0
+                },
+                "removed": {
+                  "type": "number",
+                  "examples": [
+                    500
+                  ],
+                  "description": "If more files than the threshold amount have been removed, don't execute jobs. Set to `0` to disable.",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": ["added", "removed"]
+            }
+          },
+          "additionalProperties": false,
+          "required": ["thresholds"]
+        },
+        "sync": {
+          "type": "object",
+          "properties": {
+            "pre_hash": {
+              "type": "boolean",
+              "examples": [
+                true
+              ],
+              "description": "Whether to pre-hash changed blocks before syncing."
+            },
+            "auto_sync": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "examples": [
+                    false
+                  ],
+                  "description": "Whether or not to re-run the sync command if snapraid recommends it."
+                },
+                "max_attempts": {
+                  "type": "number",
+                  "examples": [3],
+                  "description": "The max amount of attempts to `sync` the array before bailing.",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": ["enabled", "max_attempts"]
+            }
+          },
+          "additionalProperties": false,
+          "required": ["pre_hash", "auto_sync"]
+        },
+        "scrub": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "examples": [
+                true
+              ],
+              "description": "Whether or not to scrub the array."
+            },
+            "check_percent": {
+              "type": "number",
+              "examples": [
+                3
+              ],
+              "description": "How many percent of the array to scrub each time. Set to `0` to disable scrubbing.",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "min_age": {
+              "type": "number",
+              "examples": [
+                30
+              ],
+              "description": "How old the blocks have to be before considered for scrub, in days.",
+              "minimum": 1
+            },
+            "scrub_new": {
+              "type": "boolean",
+              "examples": [
+                true
+              ],
+              "description": "Whether to scrub newly synced blocks or not."
+            }
+          },
+          "additionalProperties": false,
+          "required": ["enabled", "check_percent", "min_age", "scrub_new"]
+        }
+      },
+      "additionalProperties": false,
+      "required": ["binary", "config", "nice", "diff", "sync", "scrub"]
+    },
+    "notifications": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "examples": [
+                true
+              ],
+              "description": "Whether or not to send notifications and reports to the defined email."
+            },
+            "binary": {
+              "type": "string",
+              "examples": [
+                "/usr/bin/mailx"
+              ],
+              "description": "The location of `mailx`."
+            },
+            "from_email": {
+              "type": "string",
+              "examples": [
+                "from@email.com"
+              ],
+              "description": "The senders email."
+            },
+            "to_email": {
+              "type": "string",
+              "examples": [
+                "to@email.com"
+              ],
+              "description": "The recipients email."
+            }
+          },
+          "additionalProperties": false,
+          "required": ["enabled", "binary", "from_email", "to_email"]
+        },
+        "discord": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "examples": [
+                true
+              ],
+              "description": "Whether or not to send notifications and reports to Discord."
+            },
+            "webhook_id": {
+              "type": "string",
+              "examples": ["1234567890"],
+              "description": "Discord webhook id."
+            },
+            "webhook_token": {
+              "type": "string",
+              "examples": ["abc123"],
+              "description": "Discord webhook token."
+            }
+          },
+          "additionalProperties": false,
+          "required": ["enabled", "webhook_id", "webhook_token"]
+        }
+      },
+      "additionalProperties": false,
+      "required": ["email", "discord"]
+    },
+    "logs": {
+      "type": "object",
+      "properties": {
+        "dir": {
+          "type": "string",
+          "examples": [
+            "/var/log/snapper"
+          ],
+          "description": "The directory in which to save logs. Will be created if it does not exist."
+        },
+        "max_count": {
+          "type": "number",
+          "examples": [
+            14
+          ],
+          "description": "How many historic logs to keep. A new log is generated on each run, and the previous ones are rotated and gzipped.",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": ["dir", "max_count"]
+    }
+  },
+  "additionalProperties": false,
+  "required": ["snapraid", "notifications", "logs"]
+}
