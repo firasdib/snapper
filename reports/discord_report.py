@@ -62,7 +62,7 @@ def create_discord_report(
         }
     else:
         sync_embed['color'] = did_not_run_color
-        sync_embed['description'] = 'Sync Job did **not** run.'
+        sync_embed['description'] = 'Sync job did **not** run.'
 
     scrub_embed = {'title': 'Scrub Job'}
 
