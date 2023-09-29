@@ -441,15 +441,18 @@ def run_scrub():
         return None
 
     log.info('Running scrub job...')
-    notify_info('Scrubbing...')
 
     start = datetime.now()
 
     if scrub_new:
         log.info('Scrubbing new blocks...')
+        notify_info('Scrubbing new blocks...')
+        
         scrub_new_output, _ = run_snapraid(['scrub', '-p', 'new'], handle_progress())
 
     log.info('Scrubbing old blocks...')
+    notify_info('Scrubbing old blocks...')
+
     scrub_output, _ = run_snapraid(
         ['scrub', '-p', str(check_percent), '-o', str(min_age)],
         handle_progress())
@@ -628,7 +631,7 @@ try:
         # Setup loggers after pidfile has been acquired
         raw_log = setup_logger('snapper_raw', 'snapper_raw.log')
         log = setup_logger('snapper', 'snapper.log')
-        
+
         log.handlers = raw_log.handlers + log.handlers
         log.addHandler(logging.StreamHandler())
 
