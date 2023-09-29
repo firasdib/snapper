@@ -140,6 +140,11 @@ def send_discord(message, embeds=None, message_id=None):
             # Return the message ID in case we want to manipulate it
             return data['id']
     except requests.exceptions.HTTPError as err:
+        # Handle updating a message that doesn't exist
+        if update_message and response.status_code == 404:
+            log.debug('Failed to update message, posting new.')
+            return send_discord(message, embeds=embeds)
+
         raise ConnectionError('Unable to send message to discord') from err
 
 
@@ -355,7 +360,10 @@ def handle_progress():
             if message_id is None:
                 message_id = notify_info(msg)
             else:
-                notify_info(msg, message_id=message_id)
+                new_message_id = notify_info(msg, message_id=message_id)
+
+                if new_message_id:
+                    message_id = new_message_id
 
             start = datetime.now()
 
