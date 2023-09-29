@@ -243,7 +243,7 @@ def run_snapraid(commands, progress_handler=None, allowed_return_codes=[]):
         last_lines = '\n'.join(std_err[-10:])
 
         raise SystemError(f'A critical SnapRAID error was encountered during command '
-                          f'"snapraid {" ".join(commands)}". The process exited with code {rc}.\n'
+                          f'`snapraid {" ".join(commands)}`. The process exited with code {rc}.\n'
                           f'Here are the last **10 lines** from the error log:\n```\n'
                           f'{last_lines}\n```\nThis requires your immediate attention.', std_err)
 
@@ -447,7 +447,7 @@ def run_scrub():
     if scrub_new:
         log.info('Scrubbing new blocks...')
         notify_info('Scrubbing new blocks...')
-        
+
         scrub_new_output, _ = run_snapraid(['scrub', '-p', 'new'], handle_progress())
 
     log.info('Scrubbing old blocks...')
