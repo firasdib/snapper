@@ -209,7 +209,7 @@ def run_snapraid(commands, progress_handler=None, allowed_return_codes=[]):
     std_err = []
 
     with (subprocess.Popen(
-            [snapraid_bin] + commands + ['--conf', snapraid_config],
+            [snapraid_bin, '--conf', snapraid_config] + commands,
             shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             preexec_fn=set_snapraid_priority, encoding="utf-8",
             errors='replace'
