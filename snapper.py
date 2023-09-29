@@ -140,8 +140,8 @@ def send_discord(message, embeds=None, message_id=None):
             # Return the message ID in case we want to manipulate it
             return data['id']
     except requests.exceptions.HTTPError as err:
-        # Handle updating a message that doesn't exist
-        if update_message and response.status_code == 404:
+        # Handle error when trying to update a message
+        if update_message:
             log.debug('Failed to update message, posting new.')
             return send_discord(message, embeds=embeds)
 
