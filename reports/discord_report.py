@@ -1,26 +1,31 @@
+from operator import itemgetter
+
 did_not_run_color = 8539930
 did_run_color = 1737287
 
 empty_field = {'name': '** **', 'value': '** **'}
 
 
-def create_discord_report(
-        sync_job_ran,
-        scrub_job_ran,
-        sync_job_time,
-        scrub_job_time,
-        diff_data,
-        zero_subsecond_count,
-        scrub_stats,
-        drive_stats,
-        smart_drive_data,
-        global_fp,
-        total_time
-):
+def create_discord_report(report_data):
+    sync_job_ran, scrub_job_ran, sync_job_time, scrub_job_time, diff_data, zero_subsecond_count, \
+        scrub_stats, drive_stats, smart_drive_data, global_fp, total_time = itemgetter(
+            'sync_job_ran',
+            'scrub_job_ran',
+            'sync_job_time',
+            'scrub_job_time',
+            'diff_data',
+            'zero_subsecond_count',
+            'scrub_stats',
+            'drive_stats',
+            'smart_drive_data',
+            'global_fp',
+            'total_time')(report_data)
+
     touch_embed = {'title': 'Touch Job'}
 
     if zero_subsecond_count > 0:
-        touch_embed['description'] = f'A total of **{zero_subsecond_count}** file(s) had their sub-second value fixed.'
+        touch_embed['description'] = (f'A total of **{zero_subsecond_count}** file(s) had their '
+                                      f'sub-second value fixed.')
         touch_embed['color'] = did_run_color
     else:
         touch_embed['description'] = 'No zero sub-second files were found.'
@@ -125,7 +130,7 @@ Drive Size (TiB)     {d["size"]}
 
         smart_report_embed['fields'].append(field)
 
-        if (i + 1) % 2 == 0  and i + 1 != len(smart_drive_data):
+        if (i + 1) % 2 == 0 and i + 1 != len(smart_drive_data):
             smart_report_embed['fields'].append(empty_field)
 
     embeds = [

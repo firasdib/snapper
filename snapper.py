@@ -621,36 +621,26 @@ def main():
 
         total_time = format_delta(datetime.now() - total_start)
 
-        email_report = create_email_report(
-            sync_job_ran,
-            scrub_job_ran,
-            sync_job_time,
-            scrub_job_time,
-            diff_data,
-            zero_subsecond_count,
-            scrub_stats,
-            drive_stats,
-            smart_drive_data,
-            global_fp,
-            total_time
-        )
+        report_data = {
+            'sync_job_ran': sync_job_ran,
+            'scrub_job_ran': scrub_job_ran,
+            'sync_job_time': sync_job_time,
+            'scrub_job_time': scrub_job_time,
+            'diff_data': diff_data,
+            'zero_subsecond_count': zero_subsecond_count,
+            'scrub_stats': scrub_stats,
+            'drive_stats': drive_stats,
+            'smart_drive_data': smart_drive_data,
+            'global_fp': global_fp,
+            'total_time': total_time
+        }
+
+        email_report = create_email_report(report_data)
 
         send_email('SnapRAID Job Completed Successfully', email_report)
 
         if config['notifications']['discord']['enabled']:
-            (discord_message, embeds) = create_discord_report(
-                sync_job_ran,
-                scrub_job_ran,
-                sync_job_time,
-                scrub_job_time,
-                diff_data,
-                zero_subsecond_count,
-                scrub_stats,
-                drive_stats,
-                smart_drive_data,
-                global_fp,
-                total_time
-            )
+            (discord_message, embeds) = create_discord_report(report_data)
 
             send_discord(discord_message, embeds)
 
