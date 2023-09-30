@@ -158,7 +158,7 @@
         }
       },
       "additionalProperties": false,
-      "required": ["binary", "config", "nice", "diff", "sync", "scrub"]
+      "required": ["binary", "config", "nice", "diff", "sync", "scrub", "spindown"]
     },
     "notifications": {
       "type": "object",
