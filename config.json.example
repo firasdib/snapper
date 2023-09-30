@@ -21,6 +21,11 @@
       "check_percent": 3,
       "min_age": 30,
       "scrub_new": true
+    },
+    "spindown": {
+      "enabled": false,
+      "binary": "/usr/sbin/hdparm",
+      "drives": []
     }
   },
   "notifications": {

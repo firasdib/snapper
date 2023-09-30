@@ -88,7 +88,7 @@ force_script_execution = args['force']
 
 
 #
-# Helpers
+# Notification helpers
 
 def notify_and_handle_error(message, error):
     log.error(message)
@@ -174,6 +174,9 @@ def send_email(subject, message):
     log.debug(f'Successfully sent email to {to_email}')
 
 
+#
+# Snapraid Helpers
+
 def is_running():
     for process in psutil.process_iter(attrs=['name']):
         if process.name().lower() == 'snapraid':
@@ -195,6 +198,34 @@ def set_snapraid_priority():
     p = psutil.Process(os.getpid())
     p.ionice(psutil.IOPRIO_CLASS_BE, math.floor((nice_level + 20) / 5))
 
+
+def spin_down():
+    hdparm_bin, is_enabled, drives = itemgetter('binary', 'enabled', 'drives')(config['spindown'])
+
+    if not is_enabled or len(drives) == 0:
+        return
+
+    if not os.path.isfile(hdparm_bin):
+        raise FileNotFoundError('Unable to find hdparm executable', hdparm_bin)
+
+    log.info(f'Attempting to spin down {", ".join(drives)}...')
+
+    try:
+        process = subprocess.run([hdparm_bin, '-y'] + drives,
+                                 shell=False, capture_output=True, text=True)
+
+        rc = process.returncode
+
+        if rc != 0:
+            log.error(f'Unable to successfully spin down hard drives, see error output below.')
+            log.error(process.stderr)
+    except Exception as err:
+        log.error(f'Encountered exception while attempting to spin down drives:')
+        log.error(str(err))
+
+
+#
+# Snapraid Commands
 
 def run_snapraid(commands, progress_handler=None, allowed_return_codes=[]):
     snapraid_bin, snapraid_config = itemgetter('binary', 'config')(config['snapraid'])
@@ -472,18 +503,27 @@ def run_touch():
     run_snapraid(['touch'])
 
 
-def sanity_check():
+#
+# Sanity Checker
+
+def get_snapraid_config():
     config_file = config['snapraid']['config']
 
     if not os.path.isfile(config_file):
         raise FileNotFoundError('Unable to find SnapRAID configuration', config_file)
 
     with open(config_file, 'r') as file:
-        config_content = file.read()
+        snapraid_config = file.read()
+
+    return snapraid_config
+
+
+def sanity_check():
+    snapraid_config = get_snapraid_config()
 
     file_regex = re.compile(r'^(?:content|parity) +(.+/snapraid.(?:content|parity)) *$',
                             flags=re.MULTILINE)
-    files = [m[1] for m in file_regex.finditer(config_content)]
+    files = [m[1] for m in file_regex.finditer(snapraid_config)]
 
     for file in files:
         if not os.path.isfile(file):
@@ -613,6 +653,8 @@ def main():
             )
 
             send_discord(discord_message, embeds)
+
+        spin_down()
 
         log.info('SnapRAID jobs completed successfully, exiting.')
     except (ValueError, ChildProcessError, SystemError) as err:

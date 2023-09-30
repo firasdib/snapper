@@ -17,6 +17,7 @@ The reason I created this is that I wanted more granular control of how my setup
 - Logs the raw snapraid output as well as formatted text
 - Creates a nicely formatted report and sends it via email or discord
 - Provides live insight into the sync/scrub process in Discord
+- Spin down selected hard drives after script completion
 
 **This project is a work in progress, and can change at any time.**
 
@@ -24,7 +25,7 @@ I welcome bugfixes and contributions, but be aware that I will not merge PRs tha
 
 ## How to use
 
-- Ensure you have Python 3.5 or later installed
+- Ensure you have Python 3.7 or later installed
 - Install the necessary dependencies by running `pip3 install -r requirements.txt`
 - Download the [latest release](https://github.com/firasdib/snapper/releases/latest) of this project, or clone the git project.
 - Copy or rename `config.json.example` to `config.json`
