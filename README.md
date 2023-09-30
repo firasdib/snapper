@@ -36,4 +36,4 @@ You may run the script with the `--force` flag to force a sync/scrub and ignore 
 
 A `config.json` file is required and expected to be in the same root as this script. 
 
-Please read through the [json schema](config.schema.json) to understand the exact details of each property. If you're not fluent in json schema (I don't blame you), you could use something like https://navneethg.github.io/jsonschemaviewer/ to get a better idea of the different options.
+Please read through the [json schema](config.schema.json) to understand the exact details of each property. If you're not fluent in json schema (I don't blame you), you could use something like [this](https://json-schema.app/view/%23?url=https%3A%2F%2Fraw.githubusercontent.com%2Ffirasdib%2Fsnapper%2Fmain%2Fconfig.schema.json) to get a better idea of the different options.
