@@ -145,7 +145,8 @@ def send_discord(message, embeds=None, message_id=None):
             log.debug('Failed to update message, posting new.')
             return send_discord(message, embeds=embeds)
 
-        raise ConnectionError('Unable to send message to discord') from err
+        log.error('Unable to send message to discord')
+        log.error(str(err))
 
 
 def send_email(subject, message):
