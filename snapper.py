@@ -276,7 +276,8 @@ def run_snapraid(commands, progress_handler=None, allowed_return_codes=[]):
         raise SystemError(f'A critical SnapRAID error was encountered during command '
                           f'`snapraid {" ".join(commands)}`. The process exited with code {rc}.\n'
                           f'Here are the last **10 lines** from the error log:\n```\n'
-                          f'{last_lines}\n```\nThis requires your immediate attention.', std_err)
+                          f'{last_lines}\n```\nThis requires your immediate attention.',
+                          '\n'.join(std_err))
 
     return '\n'.join(std_out), '\n'.join(std_err)
 
@@ -430,7 +431,7 @@ def _run_sync(run_count):
                             r'Missing file .+|'
                             r'Rerun the sync command when finished|'
                             r'WARNING! With \d+ disks it\'s recommended to use \w+ parity levels'
-                            r')\.[\r\n]*',
+                            r')\.\s*',
                             '', sync_errors, flags=re.MULTILINE | re.IGNORECASE)
         should_rerun = bad_errors == '' and re.search(r'^Rerun the sync command when finished',
                                                       sync_errors,
