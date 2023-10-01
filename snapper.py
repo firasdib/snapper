@@ -545,8 +545,7 @@ def main():
 
         log.info('Running sanity checks...')
 
-        if not force_script_execution:
-            sanity_check()
+        sanity_check()
 
         log.info('Checking for errors and files with zero sub-second timestamps...')
 
