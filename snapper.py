@@ -274,7 +274,7 @@ def run_snapraid(commands, progress_handler=None, allowed_return_codes=[]):
         last_lines = '\n'.join(std_err[-10:])
 
         raise SystemError(f'A critical SnapRAID error was encountered during command '
-                          f'`snapraid {" ".join(commands)}`. The process exited with code {rc}.\n'
+                          f'`snapraid {" ".join(commands)}`. The process exited with code `{rc}`.\n'
                           f'Here are the last **10 lines** from the error log:\n```\n'
                           f'{last_lines}\n```\nThis requires your immediate attention.',
                           '\n'.join(std_err))
@@ -428,6 +428,7 @@ def _run_sync(run_count):
         # the sync command, because it could be things we need to have a closer look at.
 
         bad_errors = re.sub(r'^(?:WARNING! You cannot modify (?:files|data disk) during a sync|'
+                            r'Unexpected time change at file .+|'
                             r'Missing file .+|'
                             r'Rerun the sync command when finished|'
                             r'WARNING! With \d+ disks it\'s recommended to use \w+ parity levels'
