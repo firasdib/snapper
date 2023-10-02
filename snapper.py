@@ -428,11 +428,13 @@ def _run_sync(run_count):
         # If there are other errors in the output, and not only these, we don't want to re-run
         # the sync command, because it could be things we need to have a closer look at.
 
-        bad_errors = re.sub(r'^(?:WARNING! You cannot modify (?:files|data disk) during a sync|'
-                            r'Unexpected time change at file .+|'
+        bad_errors = re.sub(r'^(?:'
+                            r'WARNING! You cannot modify (?:files|data disk) during a sync|'
+                            r'Unexpected (?:time|size) change at file .+|'
                             r'Missing file .+|'
                             r'Rerun the sync command when finished|'
-                            r'WARNING! With \d+ disks it\'s recommended to use \w+ parity levels'
+                            r'WARNING! With \d+ disks it\'s recommended to use \w+ parity levels|'
+                            r'WARNING! Unexpected file errors!'
                             r')\.\s*',
                             '', sync_errors, flags=re.MULTILINE | re.IGNORECASE)
         should_rerun = bad_errors == '' and re.search(r'^Rerun the sync command when finished',
