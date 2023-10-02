@@ -471,9 +471,8 @@ def run_sync():
 
     sync_job_time = format_delta(end - start)
 
-    msg = f'Sync job finished, elapsed time {sync_job_time}'
-    log.info(msg)
-    notify_info(msg)
+    log.info(f'Sync job finished, elapsed time **{sync_job_time}**')
+    notify_info(f'Sync job finished, elapsed time {sync_job_time}')
 
     return sync_job_time
 
@@ -508,9 +507,8 @@ def run_scrub():
 
     scrub_job_time = format_delta(end - start)
 
-    msg = f'Scrub job finished, elapsed time {scrub_job_time}'
-    log.info(msg)
-    notify_info(msg)
+    log.info(f'Scrub job finished, elapsed time {scrub_job_time}')
+    notify_info(f'Scrub job finished, elapsed time **{scrub_job_time}**')
 
     return scrub_job_time
 

@@ -147,7 +147,7 @@
             "drives": {
               "type": "string",
               "enum": ["parity", "all"],
-              "examples": ["/dev/sda", "/dev/sdb"],
+              "examples": ["parity"],
               "description": "Which drives to spin down after script execution is complete"
             }
           },
