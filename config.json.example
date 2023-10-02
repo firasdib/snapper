@@ -23,9 +23,9 @@
       "scrub_new": true
     },
     "spindown": {
-      "enabled": false,
+      "enabled": true,
       "binary": "/usr/sbin/hdparm",
-      "drives": []
+      "drives": "parity"
     }
   },
   "notifications": {

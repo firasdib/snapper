@@ -203,21 +203,32 @@ def set_snapraid_priority():
 def spin_down():
     hdparm_bin, is_enabled, drives = itemgetter('binary', 'enabled', 'drives')(config['spindown'])
 
-    if not is_enabled or len(drives) == 0:
+    if not is_enabled:
         return
 
     if not os.path.isfile(hdparm_bin):
         raise FileNotFoundError('Unable to find hdparm executable', hdparm_bin)
 
-    log.info(f'Attempting to spin down {", ".join(drives)}...')
+    log.info(f'Attempting to spin down all {drives} drives...')
+
+    content_files, parity_files = get_snapraid_config()
+    drives_to_spin_down = parity_files + content_files if drives == 'all' else []
+
+    shell_command = (f'{hdparm_bin} -y $('
+                     f'df {" ".join(drives_to_spin_down)} | '  # Get the drives
+                     f'tail -n +2 | '  # Remove the header
+                     f'cut -d " " -f1 | '  # Split by space, get the first item
+                     f'tr "\n" " "'  # Replace newlines with spaces
+                     f')')
 
     try:
-        process = subprocess.run([hdparm_bin, '-y'] + drives,
-                                 shell=False, capture_output=True, text=True)
+        process = subprocess.run(shell_command, shell=True, capture_output=True, text=True)
 
         rc = process.returncode
 
-        if rc != 0:
+        if rc == 0:
+            log.info('Successfully spun down drives.')
+        else:
             log.error(f'Unable to successfully spin down hard drives, see error output below.')
             log.error(process.stderr)
     except Exception as err:
@@ -245,7 +256,7 @@ def run_snapraid(commands, progress_handler=None, allowed_return_codes=[]):
             shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             preexec_fn=set_snapraid_priority, encoding="utf-8",
             errors='replace'
-        ) as process,
+    ) as process,
         concurrent.futures.ThreadPoolExecutor(2) as tpe,
     ):
         def read_stdout(file):
@@ -520,15 +531,23 @@ def get_snapraid_config():
     with open(config_file, 'r') as file:
         snapraid_config = file.read()
 
-    return snapraid_config
+    file_regex = re.compile(r'^(content|parity) +(.+/\w+.(?:content|parity)) *$',
+                            flags=re.MULTILINE)
+    parity_files = []
+    content_files = []
+
+    for m in file_regex.finditer(snapraid_config):
+        if m[1] == 'content':
+            content_files.append(m[2])
+        else:
+            parity_files.append(m[2])
+
+    return content_files, parity_files
 
 
 def sanity_check():
-    snapraid_config = get_snapraid_config()
-
-    file_regex = re.compile(r'^(?:content|parity) +(.+/snapraid.(?:content|parity)) *$',
-                            flags=re.MULTILINE)
-    files = [m[1] for m in file_regex.finditer(snapraid_config)]
+    content_files, parity_files = get_snapraid_config()
+    files = content_files + parity_files
 
     for file in files:
         if not os.path.isfile(file):

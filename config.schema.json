@@ -145,10 +145,8 @@
               "description": "The location of the `hdparm` executable."
             },
             "drives": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
+              "type": "string",
+              "enum": ["parity", "all"],
               "examples": ["/dev/sda", "/dev/sdb"],
               "description": "Which drives to spin down after script execution is complete"
             }
