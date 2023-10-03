@@ -128,37 +128,10 @@
           },
           "additionalProperties": false,
           "required": ["enabled", "check_percent", "min_age", "scrub_new"]
-        },
-        "spindown": {
-          "type": "object",
-          "properties": {
-            "enabled": {
-              "type": "boolean",
-              "examples": [true],
-              "description": "Whether to spin down hard drives after script execution or not"
-            },
-            "binary": {
-              "type": "string",
-              "examples": [
-                "/usr/sbin/hdparm"
-              ],
-              "description": "The location of the `hdparm` executable."
-            },
-            "drives": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "examples": ["/dev/sda", "/dev/sdb"],
-              "description": "Which drives to spin down after script execution is complete"
-            }
-          },
-          "additionalProperties": false,
-          "required": ["enabled", "binary", "drives"]
         }
       },
       "additionalProperties": false,
-      "required": ["binary", "config", "nice", "diff", "sync", "scrub", "spindown"]
+      "required": ["binary", "config", "nice", "diff", "sync", "scrub"]
     },
     "notifications": {
       "type": "object",
@@ -247,8 +220,33 @@
       },
       "additionalProperties": false,
       "required": ["dir", "max_count"]
+    },
+    "spindown": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "examples": [true],
+          "description": "Whether to spin down hard drives after script execution or not"
+        },
+        "binary": {
+          "type": "string",
+          "examples": [
+            "/usr/sbin/hdparm"
+          ],
+          "description": "The location of the `hdparm` executable."
+        },
+        "drives": {
+          "type": "string",
+          "enum": ["parity", "all"],
+          "examples": ["parity"],
+          "description": "Which drives to spin down after script execution is complete"
+        }
+      },
+      "additionalProperties": false,
+      "required": ["enabled", "binary", "drives"]
     }
   },
   "additionalProperties": false,
-  "required": ["snapraid", "notifications", "logs"]
+  "required": ["snapraid", "notifications", "logs", "spindown"]
 }

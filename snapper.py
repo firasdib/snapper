@@ -95,9 +95,13 @@ def notify_and_handle_error(message, error):
     log.error(''.join(traceback.format_exception(None, error, error.__traceback__)))
 
     send_email('WARNING! SnapRAID jobs unsuccessful', message.replace('\n', '<br>'))
-    send_discord(f':warning: [**WARNING!**] {message}')
+    notify_warning(message)
 
     exit(1)
+
+
+def notify_warning(message, embeds=None):
+    return send_discord(f':warning: [**WARNING!**] {message}', embeds=embeds)
 
 
 def notify_info(message, embeds=None, message_id=None):
@@ -145,7 +149,8 @@ def send_discord(message, embeds=None, message_id=None):
             log.debug('Failed to update message, posting new.')
             return send_discord(message, embeds=embeds)
 
-        raise ConnectionError('Unable to send message to discord') from err
+        log.error('Unable to send message to discord')
+        log.error(str(err))
 
 
 def send_email(subject, message):
@@ -202,23 +207,35 @@ def set_snapraid_priority():
 def spin_down():
     hdparm_bin, is_enabled, drives = itemgetter('binary', 'enabled', 'drives')(config['spindown'])
 
-    if not is_enabled or len(drives) == 0:
+    if not is_enabled:
         return
 
     if not os.path.isfile(hdparm_bin):
         raise FileNotFoundError('Unable to find hdparm executable', hdparm_bin)
 
-    log.info(f'Attempting to spin down {", ".join(drives)}...')
+    log.info(f'Attempting to spin down all {drives} drives...')
+
+    content_files, parity_files = get_snapraid_config()
+    drives_to_spin_down = parity_files + (content_files if drives == 'all' else [])
+
+    shell_command = (f'{hdparm_bin} -y $('
+                     f'df {" ".join(drives_to_spin_down)} | '  # Get the drives
+                     f'tail -n +2 | '  # Remove the header
+                     f'cut -d " " -f1 | '  # Split by space, get the first item
+                     f'tr "\\n" " "'  # Replace newlines with spaces
+                     f')')
 
     try:
-        process = subprocess.run([hdparm_bin, '-y'] + drives,
-                                 shell=False, capture_output=True, text=True)
+        process = subprocess.run(shell_command, shell=True, capture_output=True, text=True)
 
         rc = process.returncode
 
-        if rc != 0:
+        if rc == 0:
+            log.info('Successfully spun down drives.')
+        else:
             log.error(f'Unable to successfully spin down hard drives, see error output below.')
             log.error(process.stderr)
+            log.error(f'Shell command executed: {shell_command}')
     except Exception as err:
         log.error(f'Encountered exception while attempting to spin down drives:')
         log.error(str(err))
@@ -244,7 +261,7 @@ def run_snapraid(commands, progress_handler=None, allowed_return_codes=[]):
             shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             preexec_fn=set_snapraid_priority, encoding="utf-8",
             errors='replace'
-        ) as process,
+    ) as process,
         concurrent.futures.ThreadPoolExecutor(2) as tpe,
     ):
         def read_stdout(file):
@@ -274,7 +291,7 @@ def run_snapraid(commands, progress_handler=None, allowed_return_codes=[]):
         last_lines = '\n'.join(std_err[-10:])
 
         raise SystemError(f'A critical SnapRAID error was encountered during command '
-                          f'`snapraid {" ".join(commands)}`. The process exited with code {rc}.\n'
+                          f'`snapraid {" ".join(commands)}`. The process exited with code `{rc}`.\n'
                           f'Here are the last **10 lines** from the error log:\n```\n'
                           f'{last_lines}\n```\nThis requires your immediate attention.',
                           '\n'.join(std_err))
@@ -427,10 +444,13 @@ def _run_sync(run_count):
         # If there are other errors in the output, and not only these, we don't want to re-run
         # the sync command, because it could be things we need to have a closer look at.
 
-        bad_errors = re.sub(r'^(?:WARNING! You cannot modify (?:files|data disk) during a sync|'
+        bad_errors = re.sub(r'^(?:'
+                            r'WARNING! You cannot modify (?:files|data disk) during a sync|'
+                            r'Unexpected (?:time|size) change at file .+|'
                             r'Missing file .+|'
                             r'Rerun the sync command when finished|'
-                            r'WARNING! With \d+ disks it\'s recommended to use \w+ parity levels'
+                            r'WARNING! With \d+ disks it\'s recommended to use \w+ parity levels|'
+                            r'WARNING! Unexpected file errors!'
                             r')\.\s*',
                             '', sync_errors, flags=re.MULTILINE | re.IGNORECASE)
         should_rerun = bad_errors == '' and re.search(r'^Rerun the sync command when finished',
@@ -456,9 +476,8 @@ def run_sync():
 
     sync_job_time = format_delta(end - start)
 
-    msg = f'Sync job finished, elapsed time {sync_job_time}'
-    log.info(msg)
-    notify_info(msg)
+    log.info(f'Sync job finished, elapsed time {sync_job_time}')
+    notify_info(f'Sync job finished, elapsed time **{sync_job_time}**')
 
     return sync_job_time
 
@@ -493,9 +512,8 @@ def run_scrub():
 
     scrub_job_time = format_delta(end - start)
 
-    msg = f'Scrub job finished, elapsed time {scrub_job_time}'
-    log.info(msg)
-    notify_info(msg)
+    log.info(f'Scrub job finished, elapsed time {scrub_job_time}')
+    notify_info(f'Scrub job finished, elapsed time **{scrub_job_time}**')
 
     return scrub_job_time
 
@@ -516,15 +534,23 @@ def get_snapraid_config():
     with open(config_file, 'r') as file:
         snapraid_config = file.read()
 
-    return snapraid_config
+    file_regex = re.compile(r'^(content|parity) +(.+/\w+.(?:content|parity)) *$',
+                            flags=re.MULTILINE)
+    parity_files = []
+    content_files = []
+
+    for m in file_regex.finditer(snapraid_config):
+        if m[1] == 'content':
+            content_files.append(m[2])
+        else:
+            parity_files.append(m[2])
+
+    return content_files, parity_files
 
 
 def sanity_check():
-    snapraid_config = get_snapraid_config()
-
-    file_regex = re.compile(r'^(?:content|parity) +(.+/snapraid.(?:content|parity)) *$',
-                            flags=re.MULTILINE)
-    files = [m[1] for m in file_regex.finditer(snapraid_config)]
+    content_files, parity_files = get_snapraid_config()
+    files = content_files + parity_files
 
     for file in files:
         if not os.path.isfile(file):
@@ -545,16 +571,20 @@ def main():
 
         log.info('Running sanity checks...')
 
-        if not force_script_execution:
-            sanity_check()
+        sanity_check()
 
         log.info('Checking for errors and files with zero sub-second timestamps...')
 
         (_, _, error_count, zero_subsecond_count, sync_in_progress) = get_status()
 
-        if error_count > 0 and not force_script_execution:
-            raise SystemError(f'There are {error_count} errors in you array, you should review '
-                              f'this immediately. All jobs have been halted.')
+        if error_count > 0:
+            if force_script_execution:
+                msg = f'There are {error_count} errors in you array, ignoring due to forced run.'
+                log.error(msg)
+                notify_warning(msg)
+            else:
+                raise SystemError(f'There are {error_count} errors in you array, you should review '
+                                  f'this immediately. All jobs have been halted.')
 
         if zero_subsecond_count > 0:
             log.info(f'Found {zero_subsecond_count} file(s) with zero sub-second timestamp')
