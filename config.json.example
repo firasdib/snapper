@@ -5,7 +5,7 @@
     "nice": 10,
     "diff": {
       "thresholds": {
-        "added": 500,
+        "updated": 500,
         "removed": 500
       }
     },

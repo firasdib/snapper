@@ -33,12 +33,12 @@
             "thresholds": {
               "type": "object",
               "properties": {
-                "added": {
+                "updated": {
                   "type": "number",
                   "examples": [
                     500
                   ],
-                  "description": "If more files than the threshold amount have been added, don't execute jobs. Set to `0` to disable.",
+                  "description": "If more files than the threshold amount have been updated, don't execute jobs. Set to `0` to disable.",
                   "minimum": 0
                 },
                 "removed": {
@@ -51,7 +51,7 @@
                 }
               },
               "additionalProperties": false,
-              "required": ["added", "removed"]
+              "required": ["updated", "removed"]
             }
           },
           "additionalProperties": false,

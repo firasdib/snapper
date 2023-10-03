@@ -579,8 +579,10 @@ def main():
 
         if error_count > 0:
             if force_script_execution:
-                log.error(f'There are {error_count} errors in you array, ignoring due to forced run.')
-                notify_warning(f'There are **{error_count}** errors in you array, ignoring due to forced run.')
+                log.error(f'There are {error_count} errors in you array, '
+                          f'ignoring due to forced run.')
+                notify_warning(f'There are **{error_count}** errors in you array, '
+                               f'ignoring due to forced run.')
             else:
                 raise SystemError(f'There are {error_count} errors in you array, you should review '
                                   f'this immediately. All jobs have been halted.')
@@ -604,14 +606,14 @@ def main():
 
         if sum(diff_data.values()) - diff_data["equal"] > 0 or sync_in_progress or \
                 force_script_execution:
-            added_threshold, removed_threshold = itemgetter('added', 'removed')(
+            updated_threshold, removed_threshold = itemgetter('updated', 'removed')(
                 config['snapraid']['diff']['thresholds'])
 
             if force_script_execution:
                 log.info('Ignoring any thresholds and forcefully proceeding with sync.')
-            elif 0 < added_threshold < diff_data["added"]:
-                raise ValueError(f'More files ({diff_data["added"]}) have been added than the '
-                                 f'configured max ({added_threshold})')
+            elif 0 < updated_threshold < diff_data["updated"]:
+                raise ValueError(f'More files ({diff_data["updated"]}) have been updated than the '
+                                 f'configured max ({updated_threshold})')
             elif 0 < removed_threshold < diff_data["removed"]:
                 raise ValueError(
                     f'More files ({diff_data["removed"]}) have been removed than the configured '
@@ -619,8 +621,8 @@ def main():
             elif sync_in_progress:
                 log.info('A previous sync in progress has been detected, resuming.')
             else:
-                log.info(f'Fewer files added ({diff_data["added"]}) than the configured '
-                         f'limit ({added_threshold}), proceeding.')
+                log.info(f'Fewer files updated ({diff_data["updated"]}) than the configured '
+                         f'limit ({updated_threshold}), proceeding.')
                 log.info(f'Fewer files removed ({diff_data["removed"]}) than the configured '
                          f'limit ({removed_threshold}), proceeding.')
 
