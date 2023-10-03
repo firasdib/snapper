@@ -579,9 +579,8 @@ def main():
 
         if error_count > 0:
             if force_script_execution:
-                msg = f'There are {error_count} errors in you array, ignoring due to forced run.'
-                log.error(msg)
-                notify_warning(msg)
+                log.error(f'There are {error_count} errors in you array, ignoring due to forced run.')
+                notify_warning(f'There are **{error_count}** errors in you array, ignoring due to forced run.')
             else:
                 raise SystemError(f'There are {error_count} errors in you array, you should review '
                                   f'this immediately. All jobs have been halted.')
