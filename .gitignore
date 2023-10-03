@@ -1,0 +1,6 @@
+.idea/
+snapper.iml
+snapper/
+config.json
+__pycache__
+/*.sh
