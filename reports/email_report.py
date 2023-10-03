@@ -39,7 +39,7 @@ def create_email_report(report_data):
         </ul>
         '''
     else:
-        sync_report = sync_report + '<p>Sync Job did <strong>not</strong> run.</p>'
+        sync_report = sync_report + '<p>Sync job did <strong>not</strong> run.</p>'
 
     touch_report = '<h3>Touch job</h3>'
 

@@ -21,11 +21,6 @@
       "check_percent": 3,
       "min_age": 30,
       "scrub_new": true
-    },
-    "spindown": {
-      "enabled": true,
-      "binary": "/usr/sbin/hdparm",
-      "drives": "parity"
     }
   },
   "notifications": {
@@ -44,5 +39,10 @@
   "logs": {
     "dir": "/var/log/snapper",
     "max_count": 14
+  },
+  "spindown": {
+    "enabled": true,
+    "binary": "/usr/sbin/hdparm",
+    "drives": "parity"
   }
 }

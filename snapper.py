@@ -95,9 +95,13 @@ def notify_and_handle_error(message, error):
     log.error(''.join(traceback.format_exception(None, error, error.__traceback__)))
 
     send_email('WARNING! SnapRAID jobs unsuccessful', message.replace('\n', '<br>'))
-    send_discord(f':warning: [**WARNING!**] {message}')
+    notify_warning(message)
 
     exit(1)
+
+
+def notify_warning(message, embeds=None):
+    return send_discord(f':warning: [**WARNING!**] {message}', embeds=embeds)
 
 
 def notify_info(message, embeds=None, message_id=None):
@@ -212,13 +216,13 @@ def spin_down():
     log.info(f'Attempting to spin down all {drives} drives...')
 
     content_files, parity_files = get_snapraid_config()
-    drives_to_spin_down = parity_files + content_files if drives == 'all' else []
+    drives_to_spin_down = parity_files + (content_files if drives == 'all' else [])
 
     shell_command = (f'{hdparm_bin} -y $('
                      f'df {" ".join(drives_to_spin_down)} | '  # Get the drives
                      f'tail -n +2 | '  # Remove the header
                      f'cut -d " " -f1 | '  # Split by space, get the first item
-                     f'tr "\n" " "'  # Replace newlines with spaces
+                     f'tr "\\n" " "'  # Replace newlines with spaces
                      f')')
 
     try:
@@ -231,6 +235,7 @@ def spin_down():
         else:
             log.error(f'Unable to successfully spin down hard drives, see error output below.')
             log.error(process.stderr)
+            log.error(f'Shell command executed: {shell_command}')
     except Exception as err:
         log.error(f'Encountered exception while attempting to spin down drives:')
         log.error(str(err))
@@ -471,8 +476,8 @@ def run_sync():
 
     sync_job_time = format_delta(end - start)
 
-    log.info(f'Sync job finished, elapsed time **{sync_job_time}**')
-    notify_info(f'Sync job finished, elapsed time {sync_job_time}')
+    log.info(f'Sync job finished, elapsed time {sync_job_time}')
+    notify_info(f'Sync job finished, elapsed time **{sync_job_time}**')
 
     return sync_job_time
 
@@ -572,9 +577,14 @@ def main():
 
         (_, _, error_count, zero_subsecond_count, sync_in_progress) = get_status()
 
-        if error_count > 0 and not force_script_execution:
-            raise SystemError(f'There are {error_count} errors in you array, you should review '
-                              f'this immediately. All jobs have been halted.')
+        if error_count > 0:
+            if force_script_execution:
+                msg = f'There are {error_count} errors in you array, ignoring due to forced run.'
+                log.error(msg)
+                notify_warning(msg)
+            else:
+                raise SystemError(f'There are {error_count} errors in you array, you should review '
+                                  f'this immediately. All jobs have been halted.')
 
         if zero_subsecond_count > 0:
             log.info(f'Found {zero_subsecond_count} file(s) with zero sub-second timestamp')
