@@ -1,0 +1,5 @@
+.idea/
+snapper.iml
+snapper/
+config.json
+__pycache__

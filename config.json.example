@@ -1,0 +1,48 @@
+{
+  "snapraid": {
+    "binary": "/usr/bin/snapraid",
+    "config": "/etc/snapraid.conf",
+    "nice": 10,
+    "diff": {
+      "thresholds": {
+        "added": 500,
+        "removed": 500
+      }
+    },
+    "sync": {
+      "pre_hash": true,
+      "auto_sync": {
+        "enabled": false,
+        "max_attempts": 3
+      }
+    },
+    "scrub": {
+      "enabled": true,
+      "check_percent": 3,
+      "min_age": 30,
+      "scrub_new": true
+    }
+  },
+  "notifications": {
+    "email": {
+      "enabled": true,
+      "binary": "/usr/bin/mailx",
+      "from_email": "from@email.com",
+      "to_email": "to@email.com"
+    },
+    "discord": {
+      "enabled": false,
+      "webhook_id": "",
+      "webhook_token": ""
+    }
+  },
+  "logs": {
+    "dir": "/var/log/snapper",
+    "max_count": 14
+  },
+  "spindown": {
+    "enabled": true,
+    "binary": "/usr/sbin/hdparm",
+    "drives": "parity"
+  }
+}
