@@ -621,10 +621,12 @@ def main():
             elif sync_in_progress:
                 log.info('A previous sync in progress has been detected, resuming.')
             else:
-                log.info(f'Fewer files updated ({diff_data["updated"]}) than the configured '
-                         f'limit ({updated_threshold}), proceeding.')
-                log.info(f'Fewer files removed ({diff_data["removed"]}) than the configured '
-                         f'limit ({removed_threshold}), proceeding.')
+                if updated_threshold > 0:
+                    log.info(f'Fewer files updated ({diff_data["updated"]}) than the configured '
+                             f'limit ({updated_threshold}), proceeding.')
+                if removed_threshold > 0:
+                    log.info(f'Fewer files removed ({diff_data["removed"]}) than the configured '
+                             f'limit ({removed_threshold}), proceeding.')
 
             sync_job_time = run_sync()
             sync_job_ran = True
