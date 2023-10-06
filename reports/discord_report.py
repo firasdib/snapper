@@ -81,7 +81,7 @@ def create_discord_report(report_data):
             'text': f'Elapsed time {scrub_job_time}'
         }
     else:
-        scrub_embed['description'] = f'>Scrub Job did **not** run.'
+        scrub_embed['description'] = f'Scrub job did **not** run.'
 
     array_report_embed = {
         'title': 'Full Array Report',

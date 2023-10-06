@@ -60,7 +60,7 @@ def create_email_report(report_data):
         day(s), and the newest at <strong>{scrub_stats["newest"]}</strong> day(s).</p>
         '''
     else:
-        scrub_report = scrub_report + '<p>Scrub Job did <strong>not</strong> run.</p>'
+        scrub_report = scrub_report + '<p>Scrub job did <strong>not</strong> run.</p>'
 
     array_drive_report = ''.join(f'''
     <tr class="{"array_stats" if not d["drive_name"] else ''}">

@@ -2,7 +2,7 @@
   "snapraid": {
     "binary": "/usr/bin/snapraid",
     "config": "/etc/snapraid.conf",
-    "nice": 10,
+    "nice": 5,
     "diff": {
       "thresholds": {
         "updated": 500,
