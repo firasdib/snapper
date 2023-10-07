@@ -402,8 +402,8 @@ def handle_progress():
             msg = f'Current progress **{progress_data.group(1)}%** (`{progress_data.group(2)} MB`)'
 
             if progress_data.group(3) is not None:
-                msg = (f'{msg} — processing at **{progress_data.group(3)} MB/s** '
-                       f'(*{progress_data.group(4)} stripe/s, {progress_data.group(5)}% CPU*). '
+                msg = (f'{msg} — processing at **{int(progress_data.group(3)):,} MB/s** '
+                       f'(*{int(progress_data.group(4)):,} stripe/s, {progress_data.group(5)}% CPU*). '
                        f'**ETA:** {progress_data.group(6)}h {progress_data.group(7)}m')
 
             if message_id is None:
