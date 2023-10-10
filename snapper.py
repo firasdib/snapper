@@ -579,12 +579,12 @@ def main():
 
         if error_count > 0:
             if force_script_execution:
-                log.error(f'There are {error_count} errors in you array, '
+                log.error(f'There are {error_count} error(s) in the array, '
                           f'ignoring due to forced run.')
-                notify_warning(f'There are **{error_count}** errors in you array, '
+                notify_warning(f'There are **{error_count}** error(s) in the array, '
                                f'ignoring due to forced run.')
             else:
-                raise SystemError(f'There are {error_count} errors in you array, you should review '
+                raise SystemError(f'There are {error_count} error(s) in the array, you should review '
                                   f'this immediately. All jobs have been halted.')
 
         if zero_subsecond_count > 0:
