@@ -20,7 +20,7 @@ from jsonschema import validate
 
 from reports.discord_report import create_discord_report
 from reports.email_report import create_email_report
-from utils import format_delta, get_relative_path
+from utils import format_delta, get_relative_path, human_readable_size
 
 #
 # Read config
@@ -399,7 +399,8 @@ def handle_progress():
         is_progress = bool(progress_data)
 
         if is_progress and datetime.now() - start >= timedelta(minutes=1):
-            msg = f'Current progress **{progress_data.group(1)}%** (`{progress_data.group(2)} MB`)'
+            msg = f'Current progress **{progress_data.group(1)}%** ' \
+                  f'(`{human_readable_size(int(progress_data.group(2)))}`)'
 
             if progress_data.group(3) is not None:
                 msg = (f'{msg} — processing at **{int(progress_data.group(3)):,} MB/s** '
