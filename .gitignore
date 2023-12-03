@@ -4,3 +4,4 @@ snapper/
 config.json
 __pycache__
 /*.sh
+logs/

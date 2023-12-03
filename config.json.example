@@ -44,5 +44,9 @@
     "enabled": true,
     "binary": "/usr/sbin/hdparm",
     "drives": "parity"
+  },
+  "scripts": {
+    "pre_run": null,
+    "post_run": null
   }
 }
