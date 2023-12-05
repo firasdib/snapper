@@ -702,6 +702,8 @@ def main():
 
 
 try:
+    post_run = config['scripts']['post_run']
+
     with pidfile.PIDFile('/tmp/snapper.pid'):
         # Setup loggers after pidfile has been acquired
         raw_log = setup_logger('snapper_raw', 'snapper_raw.log')
@@ -711,11 +713,13 @@ try:
         log.addHandler(logging.StreamHandler())
 
         main()
+
+        if post_run is not None:
+            log.info('Running post-run script...')
+            run_script(post_run)
 except pidfile.AlreadyRunningError:
     print('snapper already appears to be running!')
 except:
-    post_run = config['scripts']['post_run']
-
     if post_run is not None:
         log.info('Running post-run script...')
         run_script(post_run)
