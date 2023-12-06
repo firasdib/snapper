@@ -535,7 +535,7 @@ def get_snapraid_config():
     with open(config_file, 'r') as file:
         snapraid_config = file.read()
 
-    file_regex = re.compile(r'^(content|(?:\d+-)?parity) +(.+/\w+.(?:content|(?:\d+-)?parity)) *$',
+    file_regex = re.compile(r'^(content|parity) +(.+/\w+.(?:content|parity)) *$',
                             flags=re.MULTILINE)
     parity_files = []
     content_files = []
@@ -569,7 +569,7 @@ def main():
 
         log.info('Snapper started')
 
-        pre_run = config['scripts']['pre_run']
+        pre_run, post_run = itemgetter('pre_run', 'post_run')(config['scripts'])
 
         if pre_run is not None:
             log.info('Running pre-run script...')
@@ -699,11 +699,13 @@ def main():
     except BaseException as err:
         notify_and_handle_error(
             f'Unhandled Python Exception `{str(err) if str(err) else "unknown error"}`', err)
+    finally:
+        if post_run is not None:
+            log.info('Running post-run script...')
+            run_script(post_run)
 
 
 try:
-    post_run = config['scripts']['post_run']
-
     with pidfile.PIDFile('/tmp/snapper.pid'):
         # Setup loggers after pidfile has been acquired
         raw_log = setup_logger('snapper_raw', 'snapper_raw.log')
@@ -713,13 +715,5 @@ try:
         log.addHandler(logging.StreamHandler())
 
         main()
-
-        if post_run is not None:
-            log.info('Running post-run script...')
-            run_script(post_run)
 except pidfile.AlreadyRunningError:
     print('snapper already appears to be running!')
-except:
-    if post_run is not None:
-        log.info('Running post-run script...')
-        run_script(post_run)
