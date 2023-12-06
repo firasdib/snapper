@@ -1,5 +1,5 @@
+import subprocess
 from pathlib import Path
-
 
 def format_delta(delta):
     hours, remainder = divmod(delta.seconds, 3600)
@@ -20,3 +20,11 @@ def human_readable_size(size):
         i += 1
     f = ('%.2f' % size).rstrip('0').rstrip('.')
     return '%s %s' % (f, suffixes[i])
+
+
+def run_script(script_file):
+    p = subprocess.Popen(script_file, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    retval = p.wait()
+
+    if retval != 0:
+        raise ChildProcessError(f'External script "{script_file}" returned status code {retval}.')

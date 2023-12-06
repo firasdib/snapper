@@ -20,7 +20,7 @@ from jsonschema import validate
 
 from reports.discord_report import create_discord_report
 from reports.email_report import create_email_report
-from utils import format_delta, get_relative_path, human_readable_size
+from utils import format_delta, get_relative_path, human_readable_size, run_script
 
 #
 # Read config
@@ -568,6 +568,13 @@ def main():
         total_start = datetime.now()
 
         log.info('Snapper started')
+
+        pre_run, post_run = itemgetter('pre_run', 'post_run')(config['scripts'])
+
+        if pre_run is not None:
+            log.info('Running pre-run script...')
+            run_script(pre_run)
+
         notify_info('Starting SnapRAID jobs...')
 
         log.info('Running sanity checks...')
@@ -585,8 +592,9 @@ def main():
                 notify_warning(f'There are **{error_count}** error(s) in the array, '
                                f'ignoring due to forced run.')
             else:
-                raise SystemError(f'There are {error_count} error(s) in the array, you should review '
-                                  f'this immediately. All jobs have been halted.')
+                raise SystemError(
+                    f'There are {error_count} error(s) in the array, you should review '
+                    f'this immediately. All jobs have been halted.')
 
         if zero_subsecond_count > 0:
             log.info(f'Found {zero_subsecond_count} file(s) with zero sub-second timestamp')
@@ -691,6 +699,10 @@ def main():
     except BaseException as err:
         notify_and_handle_error(
             f'Unhandled Python Exception `{str(err) if str(err) else "unknown error"}`', err)
+    finally:
+        if post_run is not None:
+            log.info('Running post-run script...')
+            run_script(post_run)
 
 
 try:

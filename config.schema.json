@@ -51,11 +51,16 @@
                 }
               },
               "additionalProperties": false,
-              "required": ["updated", "removed"]
+              "required": [
+                "updated",
+                "removed"
+              ]
             }
           },
           "additionalProperties": false,
-          "required": ["thresholds"]
+          "required": [
+            "thresholds"
+          ]
         },
         "sync": {
           "type": "object",
@@ -79,17 +84,25 @@
                 },
                 "max_attempts": {
                   "type": "number",
-                  "examples": [3],
+                  "examples": [
+                    3
+                  ],
                   "description": "The max amount of attempts to `sync` the array before bailing.",
                   "minimum": 0
                 }
               },
               "additionalProperties": false,
-              "required": ["enabled", "max_attempts"]
+              "required": [
+                "enabled",
+                "max_attempts"
+              ]
             }
           },
           "additionalProperties": false,
-          "required": ["pre_hash", "auto_sync"]
+          "required": [
+            "pre_hash",
+            "auto_sync"
+          ]
         },
         "scrub": {
           "type": "object",
@@ -127,11 +140,23 @@
             }
           },
           "additionalProperties": false,
-          "required": ["enabled", "check_percent", "min_age", "scrub_new"]
+          "required": [
+            "enabled",
+            "check_percent",
+            "min_age",
+            "scrub_new"
+          ]
         }
       },
       "additionalProperties": false,
-      "required": ["binary", "config", "nice", "diff", "sync", "scrub"]
+      "required": [
+        "binary",
+        "config",
+        "nice",
+        "diff",
+        "sync",
+        "scrub"
+      ]
     },
     "notifications": {
       "type": "object",
@@ -169,7 +194,12 @@
             }
           },
           "additionalProperties": false,
-          "required": ["enabled", "binary", "from_email", "to_email"]
+          "required": [
+            "enabled",
+            "binary",
+            "from_email",
+            "to_email"
+          ]
         },
         "discord": {
           "type": "object",
@@ -183,21 +213,32 @@
             },
             "webhook_id": {
               "type": "string",
-              "examples": ["1234567890"],
+              "examples": [
+                "1234567890"
+              ],
               "description": "Discord webhook id."
             },
             "webhook_token": {
               "type": "string",
-              "examples": ["abc123"],
+              "examples": [
+                "abc123"
+              ],
               "description": "Discord webhook token."
             }
           },
           "additionalProperties": false,
-          "required": ["enabled", "webhook_id", "webhook_token"]
+          "required": [
+            "enabled",
+            "webhook_id",
+            "webhook_token"
+          ]
         }
       },
       "additionalProperties": false,
-      "required": ["email", "discord"]
+      "required": [
+        "email",
+        "discord"
+      ]
     },
     "logs": {
       "type": "object",
@@ -219,14 +260,19 @@
         }
       },
       "additionalProperties": false,
-      "required": ["dir", "max_count"]
+      "required": [
+        "dir",
+        "max_count"
+      ]
     },
     "spindown": {
       "type": "object",
       "properties": {
         "enabled": {
           "type": "boolean",
-          "examples": [true],
+          "examples": [
+            true
+          ],
           "description": "Whether to spin down hard drives after script execution or not"
         },
         "binary": {
@@ -238,15 +284,60 @@
         },
         "drives": {
           "type": "string",
-          "enum": ["parity", "all"],
-          "examples": ["parity"],
+          "enum": [
+            "parity",
+            "all"
+          ],
+          "examples": [
+            "parity"
+          ],
           "description": "Which drives to spin down after script execution is complete"
         }
       },
       "additionalProperties": false,
-      "required": ["enabled", "binary", "drives"]
+      "required": [
+        "enabled",
+        "binary",
+        "drives"
+      ]
+    },
+    "scripts": {
+      "type": "object",
+      "properties": {
+        "pre_run": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "examples": [
+            "bash /foo/bar/baz.sh"
+          ],
+          "description": "Script to run before starting snapraid sync"
+        },
+        "post_run": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "examples": [
+            "bash /foo/bar/baz.sh"
+          ],
+          "description": "Script to run after starting snapraid sync/scrub complete. Also executes if any error is encountered."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "pre_run",
+        "post_run"
+      ]
     }
   },
   "additionalProperties": false,
-  "required": ["snapraid", "notifications", "logs", "spindown"]
+  "required": [
+    "snapraid",
+    "notifications",
+    "logs",
+    "spindown",
+    "scripts"
+  ]
 }

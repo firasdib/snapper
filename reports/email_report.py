@@ -44,8 +44,8 @@ def create_email_report(report_data):
     touch_report = '<h3>Touch job</h3>'
 
     if zero_subsecond_count > 0:
-        touch_report = touch_report + ('<p>A total of <strong>{zero_subsecond_count}</strong> '
-                                       'file(s) had their sub-second value fixed.</p>')
+        touch_report = touch_report + (f'<p>A total of <strong>{zero_subsecond_count}</strong> '
+                                        'file(s) had their sub-second value fixed.</p>')
     else:
         touch_report = touch_report + '<p>No zero sub-second files were found.</p>'
 
