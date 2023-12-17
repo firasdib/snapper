@@ -535,7 +535,7 @@ def get_snapraid_config():
     with open(config_file, 'r') as file:
         snapraid_config = file.read()
 
-    file_regex = re.compile(r'^(content|parity) +(.+/\w+.(?:content|parity)) *$',
+    file_regex = re.compile(r'^(content|(?:\d+-)?parity) +(.+/\w+.(?:content|(?:\d+-)?parity)) *$',
                             flags=re.MULTILINE)
     parity_files = []
     content_files = []
