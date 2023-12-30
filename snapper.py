@@ -605,6 +605,8 @@ def main():
 
         diff_data = get_diff()
 
+        log.info(diff_data)
+
         log.info(f'Diff output: {diff_data["equal"]} equal, ' +
                  f'{diff_data["added"]} added, ' +
                  f'{diff_data["removed"]} removed, ' +
