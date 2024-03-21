@@ -319,7 +319,7 @@ def get_status():
     error_count = re.search(r'^DANGER! In the array there are (?P<error_count>\d+) errors!',
                             snapraid_status, flags=re.MULTILINE)
     zero_subsecond_count = re.search(
-        r'^You have (?P<touch_files>\d+) files with zero sub-second timestamp', snapraid_status,
+        r'^You have (?P<touch_files>\d+) files with (?:a )?zero sub-second timestamp', snapraid_status,
         flags=re.MULTILINE)
 
     sync_in_progress = bool(

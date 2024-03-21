@@ -23,9 +23,11 @@ The reason I created this is that I wanted more granular control of how my setup
 
 I welcome bugfixes and contributions, but be aware that I will not merge PRs that I do not feel do not fit the usage of this tool.
 
-## How to use
+## Requirements
+- SnapRAID 12.2 or later
+- Python 3.7 or later
 
-- Ensure you have Python 3.7 or later installed
+## How to use
 - Install the necessary dependencies by running `pip3 install -r requirements.txt`
 - Download the [latest release](https://github.com/firasdib/snapper/releases/latest) of this project, or clone the git project.
 - Copy or rename `config.json.example` to `config.json`
