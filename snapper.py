@@ -33,6 +33,8 @@ with open(get_relative_path(__file__, './config.schema.json'), 'r') as f:
 
 validate(instance=config, schema=schema)
 
+scrub_count_file = get_relative_path(__file__, './snapper.scrubCount')
+
 
 #
 # Configure logging
@@ -484,13 +486,43 @@ def run_sync():
 
 
 def run_scrub():
-    enabled, scrub_new, check_percent, min_age = itemgetter(
-        'enabled', 'scrub_new', 'check_percent', 'min_age')(config['snapraid']['scrub'])
+    enabled, scrub_new, check_percent, min_age, scrub_delayed_run = itemgetter(
+        'enabled', 'scrub_new', 'check_percent', 'min_age', 'scrub_delayed_run'
+    )(config['snapraid']['scrub'])
 
     if not enabled:
         log.info('Scrubbing not enabled, skipping.')
 
         return None
+
+    if scrub_delayed_run and scrub_delayed_run > 0:
+        log.info('Delayed scrub is enabled.')
+
+        # get scrub_count from file or 0 if not exist or no number
+        try:
+            scrub_count = int(scrub_count_file.read_text().strip())
+        except (FileNotFoundError, ValueError):
+            scrub_count = 0
+
+        if scrub_count >= scrub_delayed_run:
+            # Run scrub job. If count is 0, scrub was forced externally
+            log.info(
+                f'Number of delayed runs has reached/exceeded threshold ({scrub_delayed_run}). A SCRUB job will run.'
+            )
+        else:
+            # DON'T run, increment count and skip the job
+            scrub_count += 1
+
+            # write the scrub_count to file here
+            scrub_count_file.write_text(str(scrub_count))
+
+            if scrub_count == scrub_delayed_run:
+                log.info('This is the **last** run left before running scrub job next time')
+            else:
+                log.info(
+                    f'{scrub_delayed_run - scrub_count} runs until the next scrub. **NOT** proceeding with SCRUB job.'
+                )
+            return None
 
     log.info('Running scrub job...')
 
@@ -515,6 +547,10 @@ def run_scrub():
 
     log.info(f'Scrub job finished, elapsed time {scrub_job_time}')
     notify_info(f'Scrub job finished, elapsed time **{scrub_job_time}**')
+
+    # reset the scrub counter
+    if os.path.exists(scrub_count_file):
+        os.remove(scrub_count_file)
 
     return scrub_job_time
 

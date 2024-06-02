@@ -20,7 +20,8 @@
       "enabled": true,
       "check_percent": 3,
       "min_age": 30,
-      "scrub_new": true
+      "scrub_new": true,
+      "scrub_delayed_run": 0
     }
   },
   "notifications": {
@@ -48,5 +49,6 @@
   "scripts": {
     "pre_run": null,
     "post_run": null
-  }
+  },
+
 }
