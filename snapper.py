@@ -33,7 +33,7 @@ with open(get_relative_path(__file__, './config.schema.json'), 'r') as f:
 
 validate(instance=config, schema=schema)
 
-scrub_count_file = get_relative_path(__file__, './snapper.scrubCount')
+sync_count_file = get_relative_path(__file__, './snapper.syncCount')
 
 
 #
@@ -495,34 +495,36 @@ def run_scrub():
 
         return None
 
-    if scrub_delayed_run and scrub_delayed_run > 0:
+    # this block only runs for users who have scrub_delayed_run nonzero (enabled)
+    if scrub_delayed_run > 0:
         log.info('Delayed scrub is enabled.')
 
-        # get scrub_count from file or 0 if not exist or no number
+        # get sync_count from file or 0 if not exist or no number
         try:
-            scrub_count = int(scrub_count_file.read_text().strip())
+            sync_count = int(sync_count_file.read_text().strip())
         except (FileNotFoundError, ValueError):
-            scrub_count = 0
+            sync_count = 0
 
-        if scrub_count >= scrub_delayed_run:
+        if sync_count >= scrub_delayed_run:
             # Run scrub job. If count is 0, scrub was forced externally
             log.info(
                 f'Number of delayed runs has reached/exceeded threshold ({scrub_delayed_run}). A SCRUB job will run.'
             )
         else:
             # DON'T run, increment count and skip the job
-            scrub_count += 1
+            sync_count += 1
 
-            # write the scrub_count to file here
-            scrub_count_file.write_text(str(scrub_count))
+            # write the sync_count to file
+            sync_count_file.write_text(str(sync_count))
 
-            if scrub_count == scrub_delayed_run:
-                log.info('This is the **last** run left before running scrub job next time')
+            if sync_count == scrub_delayed_run:
+                log.info('Scrub job will run next time.')
+                notify_info('Scrub job will run next time.')
             else:
-                log.info(
-                    f'{scrub_delayed_run - scrub_count} runs until the next scrub. **NOT** proceeding with SCRUB job.'
-                )
-            return None
+                msg = f'{scrub_delayed_run - sync_count} runs until the next scrub. **NOT** proceeding with SCRUB job.'
+                log.info(msg)
+                notify_info(msg)
+            return None     # exit early
 
     log.info('Running scrub job...')
 
@@ -549,8 +551,8 @@ def run_scrub():
     notify_info(f'Scrub job finished, elapsed time **{scrub_job_time}**')
 
     # reset the scrub counter
-    if os.path.exists(scrub_count_file):
-        os.remove(scrub_count_file)
+    if os.path.exists(sync_count_file):
+        os.remove(sync_count_file)
 
     return scrub_job_time
 

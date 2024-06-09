@@ -49,6 +49,5 @@
   "scripts": {
     "pre_run": null,
     "post_run": null
-  },
-
+  }
 }
