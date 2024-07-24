@@ -137,6 +137,15 @@
                 true
               ],
               "description": "Whether to scrub newly synced blocks or not."
+            },
+            "scrub_delayed_run": {
+              "type": "number",
+              "examples": [
+                0,
+                3
+              ],
+              "description": "Number of script runs before running scrub. Use this if you don't want to scrub the array every time",
+              "minimum": 0
             }
           },
           "additionalProperties": false,
