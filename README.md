@@ -16,7 +16,7 @@ The reason I created this is that I wanted more granular control of how my setup
 - Allows you to `scrub` after `sync`
 - Allows delay of `scrub` job to every N invocations
 - Logs the raw snapraid output as well as formatted text
-- Creates a nicely formatted report and sends it via email or discord
+- Creates a nicely formatted report and sends it via email, Discord, or [Apprise](https://github.com/caronc/apprise)
 - Provides live insight into the sync/scrub process in Discord
 - Spin down selected hard drives after script completion
 

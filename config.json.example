@@ -35,6 +35,11 @@
       "enabled": false,
       "webhook_id": "",
       "webhook_token": ""
+    },
+    "apprise": {
+      "enabled": false,
+      "binary": "/usr/bin/apprise",
+      "config": "/var/lib/apprise/config.yml"
     }
   },
   "logs": {

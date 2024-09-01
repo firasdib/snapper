@@ -239,15 +239,37 @@
           "required": [
             "enabled",
             "webhook_id",
-            "webhook_token"
-          ]
+            "webhook_token"]
+        },
+        "apprise": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "examples": [
+                true
+              ],
+              "description": "Whether or not to send notifications and reports to Apprise."
+            },
+            "binary": {
+              "type": "string",
+              "examples": [
+                "/usr/bin/apprise"
+              ],
+              "description": "The location of `apprise`."
+            },
+            "config": {
+              "type": "string",
+              "examples": ["/etc/apprise.yml"],
+              "description": "Location of the apprise configuration yml."
+            }
+          },
+          "additionalProperties": false,
+          "required": ["enabled", "binary", "config"]
         }
       },
       "additionalProperties": false,
-      "required": [
-        "email",
-        "discord"
-      ]
+      "required": ["email", "discord", "apprise"]
     },
     "logs": {
       "type": "object",

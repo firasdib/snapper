@@ -20,6 +20,7 @@ from jsonschema import validate
 
 from reports.discord_report import create_discord_report
 from reports.email_report import create_email_report
+from reports.apprise_report import create_apprise_report
 from utils import format_delta, get_relative_path, human_readable_size, run_script
 
 #
@@ -103,7 +104,8 @@ def notify_and_handle_error(message, error):
 
 
 def notify_warning(message, embeds=None):
-    return send_discord(f':warning: [**WARNING!**] {message}', embeds=embeds)
+    send_apprise(':warning: [**WARNING!**]', message)
+    send_discord(f':warning: [**WARNING!**] {message}', embeds=embeds)
 
 
 def notify_info(message, embeds=None, message_id=None):
@@ -179,6 +181,32 @@ def send_email(subject, message):
         raise ConnectionError('Unable to send email', result.stderr)
 
     log.debug(f'Successfully sent email to {to_email}')
+
+
+def send_apprise(subject, message):
+    log.debug('Attempting to send apprise notification...')
+
+    is_enabled, apprise_bin, config_loc = itemgetter(
+        'enabled', 'binary', 'config')(config['notifications']['apprise'])
+
+    if not is_enabled:
+        return
+
+    if not os.path.isfile(apprise_bin):
+        raise FileNotFoundError('Unable to find apprise executable', apprise_bin)
+
+    result = subprocess.run([
+        apprise_bin,
+        '-vv',
+        '-t', subject,
+        '-b', message,
+        '--config=' + config_loc
+    ], capture_output=True, text=True)
+
+    if result.stderr:
+        raise ConnectionError('Unable to send notification', result.stderr)
+
+    log.debug(f'Successfully sent apprise notification')
 
 
 #
@@ -573,6 +601,7 @@ def get_snapraid_config():
     with open(config_file, 'r') as file:
         snapraid_config = file.read()
 
+    #Split parity handling
     file_regex = re.compile(r'^(content|(?:\d+-)?parity) +(.+/\w+.(?:content|(?:\d+-)?parity)) *$',
                             flags=re.MULTILINE)
     parity_files = []
@@ -582,7 +611,8 @@ def get_snapraid_config():
         if m[1] == 'content':
             content_files.append(m[2])
         else:
-            parity_files.append(m[2])
+            for p in m[2].split(','):
+                parity_files.append(p)
 
     return content_files, parity_files
 
@@ -716,9 +746,13 @@ def main():
             'total_time': total_time
         }
 
-        email_report = create_email_report(report_data)
+        if config['notifications']['email']['enabled']:
+            email_report = create_email_report(report_data)
+            send_email('SnapRAID Job Completed Successfully', email_report)
 
-        send_email('SnapRAID Job Completed Successfully', email_report)
+        if config['notifications']['apprise']['enabled']:
+            apprise_report = create_apprise_report(report_data)
+            send_apprise('SnapRAID Job Completed Successfully', apprise_report)
 
         if config['notifications']['discord']['enabled']:
             (discord_message, embeds) = create_discord_report(report_data)
